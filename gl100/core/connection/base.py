@@ -22,22 +22,31 @@ class BaseConnection(ABC):
         pass
 
     @abstractmethod
-    def send(self, data: bytes | str):
-        """Envía datos al dispositivo."""
+    def send(self, command: bytes | str):
+        """Envía comando al dispositivo."""
         pass
 
     @abstractmethod
     def receive(self, size=4096) -> bytes:
-        """Recibe datos desde el dispositivo."""
+        """Recibe {size} datos desde el dispositivo."""
         pass
 
-    def query(self, command: str) -> str:
-        """Envía un comando ASCII y devuelve la respuesta como texto."""
+    @abstractmethod
+    def receive_until(self, terminator: bytes = b"\r\n") -> bytes:
+        """Recibe datos hasta {terminator} desde el dispositivo."""
+        pass
+    @abstractmethod
+    def receive_line(self)->bytes:
+        """Recibe datos hasta eol desde el dispositivo."""
+        pass
+
+    def query(self, command: str) -> bytes:
+        """Envía un comando y devuelve la respuesta."""
         self.send(command)
         time.sleep(0.05)
-        resp = self.receive().decode(errors="ignore")
-        return resp.strip()
+        response = self.receive_until()
+        return response.strip()
 
     def is_open(self) -> bool:
         """Devuelve True si la conexión está activa."""
-        return self._conn is not None
+        return self._connection is not None

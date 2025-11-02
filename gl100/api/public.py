@@ -1,14 +1,10 @@
 """
-GL100 API pública
--------------------------------------
+API pública del GL100.
 
-Clase principal GL100 que encapsula todas las operaciones de alto nivel
-para interactuar con un dispositivo Graphtec GL100.
+Ejemplo de funcionamiento:
+    from gl100 import GL100 #Importa directamente todos los módulos.
 
-Ejemplo básico:
-    from gl100 import GL100
-
-    gl = GL100(ip="192.168.0.10")
+    gl = GL100(port="COM3") 
     gl.connect()
     gl.start_measurement()
     data = gl.read_realtime()
@@ -27,8 +23,8 @@ from gl100.utils.log import logger
 
 class GL100:
     """
-    Clase principal que encapsula todas las operaciones de alto nivel
-    para interactuar con un dispositivo Graphtec GL100.
+    Clase fachada que encapsula todas las operaciones de alto nivel
+    para interactuar con el dispositivo de Graphtec.
     """
 
     # =========================================================
@@ -40,15 +36,18 @@ class GL100:
 
         Args:
             conn_type (str): Tipo de conexión. "usb" o "lan".
+            #!LAN no implementado por ahora.
             **kwargs: Parámetros específicos del tipo de conexión.
                 - USB: port, baudrate, timeout, etc.
                 - LAN: address, tcp_port, timeout, etc.
         """
         self.conn_type = conn_type
+
         self.conn = GL100Connection(conn_type=conn_type, **kwargs)
         self.device = GL100Device(self.conn)
         self.realtime = GL100Realtime(self.conn)
         self.capture = GL100Capture(self.conn)
+        
         self.connected = False
 
     # =========================================================
