@@ -47,7 +47,6 @@ class GL100:
         self.device = GL100Device(self.conn)
         self.realtime = GL100Realtime(self.conn)
         self.capture = GL100Capture(self.conn)
-
         self.connected = False
 
     # =========================================================
@@ -77,9 +76,9 @@ class GL100:
     # =========================================================
     def get_id(self):
         """Devuelve el ID del dipositivo."""
-        return self.device.get_id()
+        return self.device.common.get_id()
     
     def get_device_state(self):
         """Devuelve el estado del dispositivo."""
-        return self.device.get_device_state()
+        return self.device.common.get_device_state()
     
