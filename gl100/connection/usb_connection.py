@@ -1,20 +1,20 @@
 import serial
 import time
-from gl100.core.connection.base import BaseConnection
-from gl100.utils.log import logger
+from gl100.connection.base import BaseConnection
+from gl100.utils.logger import logger
 
 
 class USBConnection(BaseConnection):
     """
-    Implementa la comunicación USB/Serial con el GL100.
+    Implementación de la comunicación USB/Serial con el dipositivo.
     """
 
     def __init__(self, port="COM3", baudrate=9600,
                  bytesize=8, parity="N", stopbits=1,
-                 timeout=3, write_timeout=1,):
+                 timeout=3, write_timeout=1):
         
-        super().__init__() # Inicializa la clase base abstracta
-        #TODO: Probar conexión USB en Linux
+        super().__init__() # Inicializa la ABC.
+        #TODO: Probar conexión USB en Linux?
         self.port = port # Puerto serial (ej. "COM3" o "/dev/ttyUSB0")
         self.baudrate = baudrate # Velocidad de transmisión
         self.bytesize = bytesize # Tamaño de byte
@@ -23,15 +23,19 @@ class USBConnection(BaseConnection):
         self.timeout = timeout # Timeout de lectura
         self.write_timeout = write_timeout # Timeout de escritura
 
+    # =========================================================
+    # Abrir/Cerrar Conexión
+    # =========================================================
     def open(self):
-        """Abre el puerto serial.
+        """
+        Abre el puerto serial.
         
         Raises:
             serial.SerialException: Si no se puede abrir el puerto.
         
         """
         try:
-            self._conn = serial.Serial(
+            self._connection = serial.Serial(
                 port=self.port,
                 baudrate=self.baudrate,
                 bytesize=self.bytesize,
@@ -50,34 +54,47 @@ class USBConnection(BaseConnection):
         """
         Cierra el puerto serial.
         """
-        if self._conn:
+        if self._connection:
             try:
-                self._conn.close()
+                self._connection.close()
                 logger.info("[GL100 USB] Conexión cerrada")
             finally:
-                self._conn = None
+                self._connection = None
 
-    def send(self, data: bytes | str):
+    # =========================================================
+    # Envío de comando
+    # =========================================================
+    def send(self, command: bytes | str):
         """
         Envía comando.
         Args:
-            data (bytes | str): Datos a enviar.
+            command (bytes | str): Datos a enviar.
         """
+        #* Se deja la opción por ahora de enviar comandos por bytes por si se requiere 
+        #* cuando se implemente el resto de módulos.
 
-        # Asegura que los comandos terminen en CRLF
-        if isinstance(data, str) and not data.endswith("\r\n"):
-                data = (data + "\r\n").encode()
-        elif isinstance(data,str):
-            data = data.encode()
-        elif isinstance(data, bytes) and not data.endswith(b"\r\n"):
-            data += b"\r\n"
+        # Asegurar que los comandos terminen en CRLF.
+        if isinstance(command, str) and not command.endswith("\r\n"):
+            command = (command + "\r\n").encode()
+        elif isinstance(command,str):
+            command = command.encode()
+        elif isinstance(command, bytes) and not command.endswith(b"\r\n"):
+            command += b"\r\n"
 
-        if not self._conn:
+        if not self._connection:
             raise ConnectionError("Puerto USB no abierto")
         
-        self._conn.write(data)
-        self._conn.flush()  # Asegurar que los datos se envíen enteros.
-        time.sleep(0.1) # Pequeña pausa para no saturar el buffer del GL100
+        self._connection.write(command)
+        self._connection.flush()  # Asegurar que los datos se envíen enteros.
+        logger.debug(f"[USBConnection] << {command}")
+        time.sleep(0.1) # Pequeña pausa para no saturar el buffer
+
+    # =========================================================
+    # lectura de respuesta
+    # =========================================================
+    # Receive -> Nº de bytes
+    # Receive_until -> Reciba hasta encontrar un terminador.
+    # Receive -> Recibe una línea (Encontrar un \n)
 
     def receive(self, size=4096) -> bytes:
         """
@@ -88,10 +105,11 @@ class USBConnection(BaseConnection):
         Returns:
             bytes: Datos recibidos.
         """
-        if not self._conn:
+        if not self._connection:
             raise ConnectionError("Puerto USB no abierto")
         
-        response=self._conn.read(size)
+        response=self._connection.read(size)
+        logger.debug(f"[USBConnection] >> {response.decode()}")
 
         return response
 
@@ -105,21 +123,21 @@ class USBConnection(BaseConnection):
         Returns:
             bytes: Datos recibidos incluyendo el terminador.
         """
-        if not self._conn:
+        if not self._connection:
             raise ConnectionError("Puerto USB no abierto")
         
-        response=self._conn.read_until(terminator)  # Lee hasta el terminador.
+        response=self._connection.read_until(terminator)  # Lee hasta el terminador.
         #Terminador por defecto CRLF
-
+        logger.debug(f"[USBConnection] >> {response.decode()}")
         return response
     
-    def read_line(self)-> bytes:
+    def receive_line(self)-> bytes:
         """
         Lee una línea completa. Pyserial usa '\n' como terminador de línea.
         """
-        if not self._conn:
+        if not self._connection:
             raise ConnectionError("Puerto USB no abierto")
         
-        line=self._conn.readline()  # Lee hasta el terminador de línea.
+        line=self._connection.readline()  # Lee hasta el terminador de línea.
 
         return line

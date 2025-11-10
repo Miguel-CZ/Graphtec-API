@@ -1,6 +1,6 @@
 # gl100/io/realtime.py
 import struct
-from gl100.utils.log import logger
+from gl100.utils.logger import logger
 
 
 class GL100Realtime:

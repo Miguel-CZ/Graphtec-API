@@ -1,11 +1,13 @@
 import socket
-from gl100.core.connection.base import BaseConnection
-from gl100.utils.log import logger
+from gl100.connection.base import BaseConnection
+from gl100.utils.logger import logger
 
 
 class WLANConnection(BaseConnection):
     """
-    Implementa la comunicación TCP/IP (LAN o WiFi) con el GL100.
+    Implementa la comunicación TCP/IP con el dispositivo.
+    #* En principio los dispositivos del laboratorio no tienen módulo LAN.
+    #? Pero hay un modelo con conexión ethernet. Probar si requiere sockets. Sino descartar.
     """
 
     def __init__(self, address="192.168.0.10", port=8023, timeout=3):
@@ -17,9 +19,9 @@ class WLANConnection(BaseConnection):
     def open(self):
         """Abre una conexión TCP."""
         try:
-            self._conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self._conn.settimeout(self.timeout)
-            self._conn.connect((self.address, self.port))
+            self._connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._connection.settimeout(self.timeout)
+            self._connection.connect((self.address, self.port))
             logger.info(f"[GL100 LAN] Conectado a {self.address}:{self.port}")
         except socket.error as e:
             logger.error(f"[GL100 LAN] Error de conexión: {e}")
@@ -27,23 +29,24 @@ class WLANConnection(BaseConnection):
 
     def close(self):
         """Cierra la conexión TCP."""
-        if self._conn:
+        if self._connection:
             try:
-                self._conn.close()
+                self._connection.close()
                 logger.info("[GL100 LAN] Conexión cerrada")
             finally:
-                self._conn = None
+                self._connection = None
 
-    def send(self, data: bytes | str):
+    def send(self, command: bytes | str):
         """Envía datos por TCP."""
-        if isinstance(data, str):
-            data = (data + "\r\n").encode()
-        if not self._conn:
+        if isinstance(command, str):
+            command = (command + "\r\n").encode()
+        if not self._connection:
             raise ConnectionError("Socket TCP no abierto")
-        self._conn.sendall(data)
+        self._connection.sendall(command)
+
 
     def receive(self, size=4096) -> bytes:
         """Recibe datos del socket TCP."""
-        if not self._conn:
+        if not self._connection:
             raise ConnectionError("Socket TCP no abierto")
-        return self._conn.recv(size)
+        return self._connection.recv(size)

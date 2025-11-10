@@ -1,6 +1,6 @@
 # gl100/io/capture.py
 import os
-from gl100.utils.log import logger
+from gl100.utils.logger import logger
 
 
 class GL100Capture:

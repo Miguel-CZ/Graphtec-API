@@ -8,6 +8,6 @@ Incluye herramientas de soporte usadas por todos los módulos:
 - Funciones auxiliares
 """
 
-from gl100.utils.log import logger, setup_logging
+from gl100.utils.logger import logger, setup_logging
 
 __all__ = ["logger", "setup_logging"]
