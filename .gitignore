@@ -1,6 +1,7 @@
 # 
 data/
-
+codewriter.exe
+todo_el_codigo.txt
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

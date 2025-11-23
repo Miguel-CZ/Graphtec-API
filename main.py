@@ -1,16 +1,25 @@
-from gl100 import GL100 as gl
+import Graphtec
+from Graphtec import GL100
 
+print("Iniciando ejemplo de uso del API de Graphtec GL100")
 
-device = gl(conn_type='usb', port='COM3')
+logger = Graphtec.setup_logging("DEBUG")
+
+device = GL100(conn_type="usb", port="COM3")
 
 device.connect()
 
-device.set_nlcode()
+device.is_connected()
+device.get_id()
 
-print(device.is_connected())
+device.update_channels()
 
-print(device.get_id())
+channels = device.get_channels()
 
-print(device.save_settings())
+for key, value in channels.items():
+    print(f"Canal {key}: Tipo={value['type']}, Entrada={value['input']}, Rango={value['range']}")
+
+
+print(device.read())
 
 device.disconnect()
