@@ -72,13 +72,24 @@ class GL100:
         return self.connected
     
     # =========================================================
-    # ESTADO (device)
+    # Grupo COMMON
     # =========================================================
     def get_id(self):
         """Devuelve el ID del dipositivo."""
         return self.device.common.get_id()
     
-    def get_device_state(self):
-        """Devuelve el estado del dispositivo."""
-        return self.device.common.get_device_state()
+    def save_settings(self):
+        """Guarda la configuración en la memoria del dispositivo."""
+        return self.device.common.save_settings()
+    
+    def clear(self):
+        """Limpia el estado interno (buffer,errores, etc)"""
+        return self.device.common.clear()
+    
+    # =========================================================
+    # ESTADO (device)
+    # =========================================================
+    def set_nlcode(self,code="CR_LF"):
+
+        return self.device.interface.set_nlcode(code)
     

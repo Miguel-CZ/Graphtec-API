@@ -6,25 +6,9 @@ Alias de comandos IF del GL100.
 # Grupo COMMON
 # ========================================================= 
 GET_IDN = "*IDN?" #* Implementado
-GET_IDN_2 = ":COMMON:IDN?" #? Probar con cual quedarme
-
-GET_SYSTEM_INFO = ":COMMON:INFO?" #* Implementado
-GET_DEVICE_STATE = ":STAT:ALL?"
-
 SAVE_SETTINGS = "*SAV" #* Implementado
-SAVE_SETTINGS_2 = ":COMMON:SAV" # Guarda la config en la EEPROM #? Probar con cual quedarme
-
 CLEAR = "*CLS" #* Implementado
-CLEAR_2 = ":COMMON:CLS" #? Probar con cual quedarme
 
-GET_VERSION = ":COMMON:VER?" #* Implementado
-GET_MODEL = ":COMMON:MODEL?" #* Implementado
-GET_SERIES = ":COMMON:SERIAL?" #* Implementado
-
-GET_GENERAL_STATUS = ":COMMON:STAT?" #Ready / Busy #* Implementado
-RESET_GENERAL = ":COMMON:RESET" #* Implementado
-
-GET_CONN_MAC = ":IF:MAC?"
 
 # =========================================================
 # Grupo OPT (Opciones)

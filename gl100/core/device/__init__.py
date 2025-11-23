@@ -34,8 +34,3 @@ class GL100Device:
         logger.debug(f"[GL100Device] Inicializado con {connection}")
 
         #self.config.load_from_device(self)
-
-        try:
-            self.connection.send(":IF:NLCODE CR_LF")
-        except Exception as e:
-            logger.error(f"[GL100Device] Error al configurar EOL: {e}")

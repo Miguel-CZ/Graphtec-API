@@ -9,7 +9,7 @@ class USBConnection(BaseConnection):
     Implementación de la comunicación USB/Serial con el dipositivo.
     """
 
-    def __init__(self, port="COM3", baudrate=9600,
+    def __init__(self, port="COM3", baudrate=38400,
                  bytesize=8, parity="N", stopbits=1,
                  timeout=3, write_timeout=1):
         
