@@ -1,5 +1,5 @@
-from Graphtec.core.device.base import BaseModule
-from Graphtec.core.commands import *
+from graphtec.core.device.base import BaseModule
+from graphtec.core.commands import *
 import logging
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,7 @@ class MeasureModule(BaseModule):
 
     def read_one_measurement(self):
         response = self.connection.query(READ_ONCE)
-        response = response.decode().strip()
+        response = response
         return response
     
     def read_cont_measurement(self):
@@ -46,3 +46,5 @@ class MeasureModule(BaseModule):
         response = self.connection.query(GET_DATA_FORMAT)
         response = response.decode().strip()
         return response
+    
+    

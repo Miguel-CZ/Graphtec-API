@@ -1,6 +1,6 @@
 import serial
 import time
-from Graphtec.connection.base import BaseConnection
+from graphtec.connection.base import BaseConnection
 import logging
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ class USBConnection(BaseConnection):
             raise ConnectionError("Puerto USB no abierto")
         
         response=self._connection.read(size)
-        logger.debug(f"[USBConnection] >> {response.decode()}")
+        logger.debug(f"[USBConnection] >> {response}")
 
         return response
 
@@ -129,7 +129,7 @@ class USBConnection(BaseConnection):
         
         response=self._connection.read_until(terminator)  # Lee hasta el terminador.
         #Terminador por defecto CRLF
-        logger.debug(f"[USBConnection] >> {response.decode()}")
+        logger.debug(f"[USBConnection] >> {response}")
         return response
     
     def receive_line(self)-> bytes:
@@ -143,9 +143,106 @@ class USBConnection(BaseConnection):
 
         return line
     
-    def query(self, command: str) -> bytes:
+    def query(self, command: str)-> bytes:
         self.send(command)
-        time.sleep(0.05)
-        #response = self.receive(4096)
-        response = self.receive_until(b"\r\n")
-        return response.strip()
+
+        cmd_up = command.upper()
+
+        # Realtime
+        if cmd_up.startswith(":MEAS:OUTP"):
+            return self.read_binary()
+
+        # Transferencia bloque binario
+        if cmd_up.startswith(":TRANS:OUTP:DATA?"):
+            return self.read_binary()
+
+        # Cabecera GBD
+        if cmd_up.startswith(":TRANS:OUTP:HEAD?"):
+            return self.read_binary()
+
+        # Apertura TRANS → 3 bytes
+        if cmd_up.startswith(":TRANS:OPEN?"):
+            if self._connection is not None:
+                return self._connection.read(3)
+            else: 
+                return b""
+
+        return self.read_ascii()
+    
+    def read_ascii(self) -> bytes:
+        """
+        Lee una respuesta ASCII hasta CRLF.
+        
+        Returns:
+            bytes: Datos recibidos.
+        """
+        return self.receive_until(b"\r\n")
+    
+    def read_binary(self):
+        """
+        Lee un bloque binario estilo #6xxxxxx del GL100.
+        Elimina cualquier basura previa al carácter '#'.
+        """
+        if not self._connection:
+            raise RuntimeError("Serial no inicializado")
+
+        # 1) Leer hasta encontrar '#'
+        while True:
+            b = self._connection.read(1)
+            if not b:
+                raise TimeoutError("Timeout esperando inicio de bloque (#)")
+            if b == b"#":
+                break  # encontrado inicio real
+            # si no es "#", es basura → se ignora silenciosamente
+
+        # 2) Leer dígito que indica nº de dígitos del length
+        ndigits_b = self._connection.read(1)
+        if not ndigits_b or not ndigits_b.isdigit():
+            logger.error(f"[USBConnection] Cabecera binaria inválida: {ndigits_b!r}")
+            raise ValueError("Cabecera binaria inválida.")
+
+        nd = int(ndigits_b.decode())
+
+        # 3) Leer longitud ASCII
+        length_str = self._connection.read(nd)
+        try:
+            data_len = int(length_str.decode())
+        except Exception:
+            logger.error(f"[USBConnection] Longitud inválida: {length_str!r}")
+            raise ValueError("Error longitud bloque.")
+
+        # 4) Leer payload binario
+        payload = self._connection.read(data_len)
+
+        # 5) Intentar leer CRLF final (opcional)
+        tail = self._connection.read(2)
+        if tail not in (b"", b"\r\n"):
+            pass  # ignoramos, puede venir fragmentado
+
+        logger.debug(f"[USBConnection] << BIN {data_len} bytes")
+        return b"#" + ndigits_b + length_str + payload
+    
+    def read_until_idle(self, idle_ms=800, overall_ms=10000):
+        """
+        Lectura ASCII continua hasta que el dispositivo queda inactivo.
+        """
+        import time
+
+        if not self._connection:
+            return ""
+
+        out = bytearray()
+        deadline = time.time() + overall_ms / 1000.0
+        last = time.time()
+
+        while time.time() < deadline:
+            waiting = self._connection.in_waiting if hasattr(self._connection, "in_waiting") else 0
+            if waiting:
+                out += self._connection.read(waiting)
+                last = time.time()
+            else:
+                if (time.time() - last) * 1000 >= idle_ms:
+                    break
+                time.sleep(0.02)
+
+        return out.decode("ascii", errors="ignore").strip()

@@ -1,5 +1,5 @@
 import socket
-from Graphtec.connection.base import BaseConnection
+from graphtec.connection.base import BaseConnection
 import logging
 logger = logging.getLogger(__name__)
 

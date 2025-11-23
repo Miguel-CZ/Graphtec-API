@@ -1,4 +1,4 @@
-import time
+
 from abc import ABC, abstractmethod
 import logging
 logger = logging.getLogger(__name__)
@@ -39,10 +39,6 @@ class BaseConnection(ABC):
     @abstractmethod
     def receive_line(self)->bytes:
         """Recibe datos hasta eol desde el dispositivo."""
-        pass
-
-    def query(self, command: str) -> bytes:
-        """Envía un comando y devuelve la respuesta."""
         pass
 
     def is_open(self) -> bool:

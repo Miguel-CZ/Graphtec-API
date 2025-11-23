@@ -2,9 +2,9 @@
 API pública del GL100.
 
 Ejemplo de funcionamiento:
-    from gl100 import GL100 #Importa directamente todos los módulos.
+    from graphtec import Graphtec #Importa directamente todos los módulos.
 
-    gl = GL100(port="COM3") 
+    gl = Graphtec(port="COM3") 
     gl.connect()
     gl.start_measurement()
     data = gl.read_realtime()
@@ -14,15 +14,15 @@ Ejemplo de funcionamiento:
 Autor: Miguel Chen Zheng
 """
 
-from Graphtec.connection import GL100Connection
-from Graphtec.core.device import GL100Device
-from Graphtec.io.realtime import GL100Realtime
-from Graphtec.io.capture import GL100Capture
+from graphtec.connection import GL100Connection
+from graphtec.core.device import GL100Device
+from graphtec.io.realtime import GL100Realtime
+from graphtec.io.capture import GL100Capture
 import logging
 logger = logging.getLogger(__name__)
 
 
-class GL100:
+class Graphtec:
     """
     Clase fachada que encapsula todas las operaciones de alto nivel
     para interactuar con el dispositivo de Graphtec.
@@ -43,12 +43,14 @@ class GL100:
                 - LAN: address, tcp_port, timeout, etc.
         """
         self.conn_type = conn_type
-
         self.conn = GL100Connection(conn_type=conn_type, **kwargs)
+
         self.device = GL100Device(self.conn)
         self.realtime = GL100Realtime(self.device)
         self.capture = GL100Capture(self.conn)
+        
         self.connected = False
+        self.channels = None
 
     # =========================================================
     # CONEXIÓN
@@ -58,6 +60,12 @@ class GL100:
         self.conn.open()
         self.connected = True
         logger.info(f"[GL100] Conectado vía {self.conn_type.upper()}")
+
+        #Inicializar dispositivo
+        self.channels = self.update_channels()
+
+        
+
 
     def disconnect(self):
         """Cierra la conexión con el GL100."""
@@ -113,5 +121,18 @@ class GL100:
     def update_channels(self):
         """Actualiza la configuración de los canales desde el dispositivo."""
         return self.device.amp.update_channels()
+    
+    def list_files(self, path="\\MEM\\LOG\\",long=True, filt="GBD"):
+        """Lista los archivos de captura almacenados en el dispositivo."""
+        return self.capture.list_files(path=path,long=long, filt=filt)
+    
+    def download_file(self, path_in_gl: str, dest_folder: str):
+        """Descarga un archivo de captura desde el dispositivo.
+
+        Args:
+            filename (str): Nombre del archivo en el dispositivo.
+            dest_path (str): Ruta local donde guardar el archivo.
+        """
+        return self.capture.download_file(path_in_gl, dest_folder)
     
     

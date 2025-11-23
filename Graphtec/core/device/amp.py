@@ -1,5 +1,5 @@
-from Graphtec.core.device.base import BaseModule
-from Graphtec.core.commands import *
+from graphtec.core.device.base import BaseModule
+from graphtec.core.commands import *
 import logging
 logger = logging.getLogger(__name__)
 
@@ -7,12 +7,15 @@ class AmpModule(BaseModule):
     """Grupo AMP: Configuración de canales"""
     def __init__(self,device):
         super().__init__(device)
-        self.channels = {ch: {"type": "", "input": None, "range": None}
+        self.channels = {ch: {"type": None, "input": None, "range": None}
                          for ch in range(1, 5)}
+        
     
 
     def get_channels(self)->dict:
         """Devuelve la configuración de los canales."""
+        for key,value in self.channels.items():
+            logger.info(f"Canal {key}: Tipo={value['type']}, Input={value['input']}, Rango={value['range']}")
         return self.channels
     
     def update_channels(self)->dict:

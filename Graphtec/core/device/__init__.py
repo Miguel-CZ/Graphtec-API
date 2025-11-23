@@ -1,16 +1,16 @@
-from Graphtec.core.device.base import BaseModule
-from Graphtec.core.device.common import CommonModule
-from Graphtec.core.device.interface import InterfaceModule
-from Graphtec.core.device.status import StatusModule
-from Graphtec.core.device.amp import AmpModule
-from Graphtec.core.device.data import DataModule
-from Graphtec.core.device.measure import MeasureModule
-from Graphtec.core.device.transfer import TransferModule
-from Graphtec.core.device.file import FileModule
-from Graphtec.core.device.trigger import TriggerModule
-from Graphtec.core.device.alarm import AlarmModule
-from Graphtec.core.device.logic import LogicModule
-from Graphtec.config.config_manager import ConfigManager
+from graphtec.core.device.base import BaseModule
+from graphtec.core.device.common import CommonModule
+from graphtec.core.device.interface import InterfaceModule
+from graphtec.core.device.status import StatusModule
+from graphtec.core.device.amp import AmpModule
+from graphtec.core.device.data import DataModule
+from graphtec.core.device.measure import MeasureModule
+from graphtec.core.device.transfer import TransferModule
+from graphtec.core.device.file import FileModule
+from graphtec.core.device.trigger import TriggerModule
+from graphtec.core.device.alarm import AlarmModule
+from graphtec.core.device.logic import LogicModule
+from graphtec.config.config_manager import ConfigManager
 import logging
 logger = logging.getLogger(__name__)
 
@@ -32,6 +32,11 @@ class GL100Device:
         self.alarm = AlarmModule(self)
         self.logic = LogicModule(self)
 
-        logger.debug(f"[GL100Device] Inicializado con {self.connection}")
+        logger.debug(f"[GL100Device] Inicializado")
+
 
         #self.config.load_from_device(self)
+
+    def get_channels(self):
+        channels = self.amp.get_channels()
+        return channels

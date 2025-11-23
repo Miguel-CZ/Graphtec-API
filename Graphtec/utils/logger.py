@@ -14,7 +14,7 @@ def setup_logging(level:int|str=logging.INFO, logfile=None):
         level = getattr(logging, level, logging.INFO)
 
     # Logger raíz del paquete
-    logger = logging.getLogger("Graphtec")
+    logger = logging.getLogger("graphtec")
 
     # ----------------------------------------
     # 2. Configurar root logger para evitar ruido

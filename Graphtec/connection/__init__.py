@@ -1,5 +1,5 @@
-from Graphtec.connection.usb_connection import USBConnection
-from Graphtec.connection.wlan_connection import WLANConnection
+from graphtec.connection.usb_connection import USBConnection
+from graphtec.connection.wlan_connection import WLANConnection
 import logging
 logger = logging.getLogger(__name__)
 

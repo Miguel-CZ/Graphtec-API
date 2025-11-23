@@ -1,5 +1,5 @@
-from Graphtec.core.device.base import BaseModule
-from Graphtec.core.commands import *
+from graphtec.core.device.base import BaseModule
+from graphtec.core.commands import *
 import logging
 logger = logging.getLogger(__name__)
 

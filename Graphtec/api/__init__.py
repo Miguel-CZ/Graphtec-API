@@ -16,6 +16,6 @@ Ejemplo de uso:
     gl.disconnect()
 """
 
-from Graphtec.api.public import GL100
+from graphtec.api.public import Graphtec
 
-__all__ = ["GL100"]
+__all__ = ["Graphtec"]
