@@ -5,7 +5,7 @@ Todas las excepciones heredan de GL100Error, lo que permite capturar
 cualquier error del núcleo con una sola cláusula si se desea.
 """
 
-class GL100Error(Exception):
+class GraphtecError(Exception):
     """Excepción base para todos los errores del GL100."""
     pass
 
@@ -13,7 +13,7 @@ class GL100Error(Exception):
 # ───────────────────────────────
 # Errores de conexión / transporte
 # ───────────────────────────────
-class ConnectionError(GL100Error):
+class ConnectionError(GraphtecError):
     """Error relacionado con la conexión física (USB/WLAN)."""
     pass
 
@@ -31,7 +31,7 @@ class DisconnectedError(ConnectionError):
 # ───────────────────────────────
 # Errores de comandos / protocolo IF
 # ───────────────────────────────
-class CommandError(GL100Error):
+class CommandError(GraphtecError):
     """Error al enviar o ejecutar un comando IF."""
     pass
 
@@ -44,7 +44,7 @@ class ResponseError(CommandError):
 # ───────────────────────────────
 # Errores de datos / formato
 # ───────────────────────────────
-class DataError(GL100Error):
+class DataError(GraphtecError):
     """Error en la recepción o decodificación de datos."""
     pass
 
@@ -62,11 +62,11 @@ class FileFormatError(DataError):
 # ───────────────────────────────
 # Errores de configuración / estado
 # ───────────────────────────────
-class ConfigurationError(GL100Error):
+class ConfigurationError(GraphtecError):
     """Error al aplicar o cargar configuraciones del GL100."""
     pass
 
 
-class DeviceStateError(GL100Error):
+class DeviceStateError(GraphtecError):
     """El dispositivo está en un estado incompatible con la operación."""
     pass

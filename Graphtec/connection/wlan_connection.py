@@ -11,10 +11,10 @@ class WLANConnection(BaseConnection):
     #? Pero hay un modelo con conexión ethernet. Probar si requiere sockets. Sino descartar.
     """
 
-    def __init__(self, address="192.168.0.10", port=8023, timeout=3):
+    def __init__(self, address="192.168.0.10", tcp_port=8023, timeout=3):
         super().__init__()
         self.address = address
-        self.port = port
+        self.port = tcp_port
         self.timeout = timeout
 
     def open(self):
@@ -51,3 +51,27 @@ class WLANConnection(BaseConnection):
         if not self._connection:
             raise ConnectionError("Socket TCP no abierto")
         return self._connection.recv(size)
+    
+    def receive_until(self, terminator: bytes = b"\n") -> bytes:
+        """Recibe datos hasta encontrar el terminador."""
+        if not self._connection:
+            raise ConnectionError("Socket TCP no abierto")
+        
+        data = bytearray()
+        while True:
+            chunk = self._connection.recv(1)
+            if not chunk:
+                break
+            data += chunk
+            if data.endswith(terminator):
+                break
+        return bytes(data)
+    
+    def receive_line(self) -> bytes:
+        """Recibe una línea completa (hasta \n)."""
+        return self.receive_until(terminator=b"\n") 
+    
+    def query(self, command: bytes | str, size=4096) -> bytes:
+        """Envía un comando y recibe la respuesta."""
+        self.send(command)
+        return self.receive(size=size)

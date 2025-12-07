@@ -14,10 +14,10 @@ Ejemplo de funcionamiento:
 Autor: Miguel Chen Zheng
 """
 
-from graphtec.connection import GL100Connection
-from graphtec.core.device import GL100Device
-from graphtec.io.realtime import GL100Realtime
-from graphtec.io.capture import GL100Capture
+from graphtec.connection import GraphtecConnection
+from graphtec.core.device import GraphtecDevice
+from graphtec.io.realtime import GraphtecRealtime
+from graphtec.io.capture import GraphtecCapture
 import logging
 logger = logging.getLogger(__name__)
 
@@ -37,17 +37,17 @@ class Graphtec:
 
         Args:
             conn_type (str): Tipo de conexión. "usb" o "lan".
-            #!LAN no implementado por ahora.
+            #! Se deja en la arquitectura conexión LAN para futuras actualizaciones si se desea.
             **kwargs: Parámetros específicos del tipo de conexión.
                 - USB: port, baudrate, timeout, etc.
                 - LAN: address, tcp_port, timeout, etc.
         """
         self.conn_type = conn_type
-        self.conn = GL100Connection(conn_type=conn_type, **kwargs)
+        self.conn = GraphtecConnection(conn_type=conn_type, **kwargs)
 
-        self.device = GL100Device(self.conn)
-        self.realtime = GL100Realtime(self.device)
-        self.capture = GL100Capture(self.conn)
+        self.device = GraphtecDevice(self.conn)
+        self.realtime = GraphtecRealtime(self.device)
+        self.capture = GraphtecCapture(self.conn)
         
         self.connected = False
         self.channels = None
@@ -62,7 +62,7 @@ class Graphtec:
         logger.info(f"[GL100] Conectado vía {self.conn_type.upper()}")
 
         #Inicializar dispositivo
-        self.channels = self.update_channels()
+        #self.channels = self.update_channels()
 
         
 

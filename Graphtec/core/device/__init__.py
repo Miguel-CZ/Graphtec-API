@@ -14,7 +14,7 @@ from graphtec.config.config_manager import ConfigManager
 import logging
 logger = logging.getLogger(__name__)
 
-class GL100Device:
+class GraphtecDevice:
     def __init__(self, connection):
         self.connection = connection
         self.config = ConfigManager()

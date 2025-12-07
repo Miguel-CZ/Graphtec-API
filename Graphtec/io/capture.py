@@ -4,51 +4,52 @@ import csv
 import struct
 import logging
 from datetime import datetime, timedelta
-import time
 
 logger = logging.getLogger(__name__)
 
 
-class GL100Capture:
+class GraphtecCapture:
     """
-    descarga archivos gbd del gl100 y genera:
+    Descarga archivos GBD del GL100 usando TRANS y genera:
+
         <nombre>/
-            <nombre>.gbd   (bloques trans crudos)
-            <nombre>.hdr   (header trans)
-            <nombre>.bin   (data pura concatenada)
+            <nombre>.hdr   (header ASCII del GBD)
+            <nombre>.bin   (datos puros concatenados, 16-bit big-endian)
+            <nombre>.gbd   (GBD reconstruido según especificación oficial)
             <nombre>.csv   (timestamp + valores en unidades físicas)
+
+    Basado en:
+      - GL100 Data Reception Specifications (TRANS / #6****** / status / checksum)
+      - GL100 GBD File Specification Sheet (HeaderSiz, secciones Header/Data)
+      - Binary translation of voltage data of 4ch voltage temperature (GS-4VT)
     """
 
     def __init__(self, connection):
         self.conn = connection
 
     # ============================================================
-    # list files
+    # LISTADO DE ARCHIVOS
     # ============================================================
     def list_files(self, path="\\MEM\\LOG\\", long=True, filt="OFF"):
         """
-        Lista archivos en un directorio del GL100.
+        Lista archivos en un directorio del dispositivo (DISK).
 
         Args:
-            path (str): ruta en el GL100, ej. "\\MEM\\LOG\\"
+            path (str): ruta en el Graphtec, ej. "\\MEM\\LOG\\"
             long (bool): formato LONG (con tamaño/fecha) o SHORT
             filt (str|OFF): filtrar por extensión ("GBD") o OFF
 
         Returns:
             list[str]: nombres de archivo (sin carpetas)
         """
-
-        # 1) Cambiar de carpeta
+        # Cambiar de carpeta
         self.conn.send(f':FILE:CD "{path}"')
 
-        self.conn.send(f':FILE:LIST?')
-        print(self.conn.receive_line())
-        
-        # 2) Seleccionar formato de salida
+        # Seleccionar formato de salida
         form = "LONG" if long else "SHORT"
         self.conn.send(f":FILE:LIST:FORM {form}")
 
-        # 3) Filtro
+        # Filtro
         if isinstance(filt, str) and filt.upper() != "OFF":
             ext = filt.strip()
             if not ext.startswith('"'):
@@ -57,31 +58,27 @@ class GL100Capture:
         else:
             self.conn.send(":FILE:LIST:FILT OFF")
 
-        # 4) Obtener texto list
+        # Obtener list
         raw = self.conn.query(":FILE:LIST?")
 
         if not isinstance(raw, str):
             try:
                 raw = raw.decode("ascii", errors="ignore")
             except Exception:
-                logger.error("[GL100Capture] list_files recibió datos no ASCII")
+                logger.error("[GraphtecCapture] list_files recibió datos no ASCII")
                 return []
 
         return self._parse_file_list(raw)
 
-
     @staticmethod
     def _parse_file_list(list_text: str):
         """
-        Parser original adaptado.
         Extrae los nombres entre comillas.
         Ignora carpetas (terminan en '\').
         """
-
         if not list_text:
             return []
 
-        # asegurar que es str
         if isinstance(list_text, bytes):
             list_text = list_text.decode("ascii", errors="ignore")
 
@@ -91,141 +88,215 @@ class GL100Capture:
 
         clean = []
         for it in items:
-            if it.endswith("\\"):   # carpeta
+            if it.endswith("\\"):  # carpeta
                 continue
             clean.append(it.split()[0])  # solo nombre limpio
 
         return clean
 
-
     # ============================================================
-    # descarga completa (gbd + hdr + bin + csv)
+    # PIPELINE COMPLETO: HDR + BIN + GBD + CSV
     # ============================================================
     def download_file(self, path_in_gl: str, dest_folder: str):
+        """
+        Descarga un archivo de medida del GL100 vía TRANS y genera:
+          - .hdr (header ASCII)
+          - .bin (datos puros 16-bit big-endian)
+          - .gbd (archivo GBD reconstruido, compatible con el software oficial)
+          - .csv (datos en unidades físicas)
+
+        Args:
+            path_in_gl (str): ruta completa en el GL100, p.ej. "\\MEM\\LOG\\251130-110423.GBD"
+            dest_folder (str): carpeta local destino.
+        """
         base = os.path.basename(path_in_gl)
         name_no_ext = os.path.splitext(base)[0]
 
         out_dir = os.path.join(dest_folder, name_no_ext)
         os.makedirs(out_dir, exist_ok=True)
 
-        gbd_path = os.path.join(out_dir, name_no_ext + ".GBD")
         hdr_path = os.path.join(out_dir, name_no_ext + ".hdr")
         bin_path = os.path.join(out_dir, name_no_ext + ".bin")
+        gbd_path = os.path.join(out_dir, name_no_ext + ".GBD")
         csv_path = os.path.join(out_dir, name_no_ext + ".csv")
 
-        logger.info(f"[GL100Capture] Descargando {path_in_gl} → {out_dir}")
+        logger.info(f"[GraphtecCapture] Descargando {path_in_gl} → {out_dir}")
 
-        # 1) seleccionar archivo
+        # 1) Seleccionar archivo como fuente de TRANS
         self.conn.send(f':TRANS:SOUR DISK,"{path_in_gl}"')
 
-        # 2) abrir trans
+        # 2) Abrir TRANS
         resp = self.conn.query(":TRANS:OPEN?")
         ok = False
         if isinstance(resp, bytes) and len(resp) == 3:
+            # bit 0 de tercer byte = error
             ok = not (resp[2] & 0x01)
         elif isinstance(resp, str):
             ok = "OK" in resp.upper()
 
         if not ok:
-            logger.error(f"TRANS:OPEN? falló → {resp}")
+            logger.error(f"[GraphtecCapture] TRANS:OPEN? falló → {resp}")
             return None
 
-        logger.info("TRANS abierto correctamente.")
+        logger.info("[GraphtecCapture] TRANS abierto correctamente.")
 
-        # 3) leer header trans
+        # 3) Leer header TRANS → .hdr
         header_text = self._read_header_trans()
         with open(hdr_path, "w", encoding="utf-8") as f:
             f.write(header_text)
-        logger.info(f"Header guardado en {hdr_path}")
+        logger.info(f"[GraphtecCapture] Header guardado en {hdr_path}")
 
-        # 4) parsear metadatos reales
+        # 4) Parsear metadatos del header
         order = self._extract_order(header_text)
         counts = self._extract_counts(header_text)
         sample_delta = self._extract_sample_delta(header_text)
         start_dt = self._extract_start_datetime(header_text)
-
         amp_info = self._extract_amp_info(header_text)
         spans = self._extract_spans(header_text)
+        module = self._extract_module(header_text)
+        header_siz = self._extract_header_size(header_text)
 
         if not order or counts <= 0:
-            logger.error("header sin order o counts válidos.")
+            logger.error("[GraphtecCapture] Header sin Order o Counts válidos.")
+            # Cerrar TRANS antes de salir
+            self.conn.send(":TRANS:CLOSE?")
+            self.conn.read_ascii()
             return None
 
         bytes_per_sample = len(order) * 2
-        logger.info(f"order={order}, samples={counts}, bytes/row={bytes_per_sample}")
+        total_bytes_expected = counts * bytes_per_sample
 
-        # 5) guardar gbd crudo (bloques sin tocar)
-        with open(gbd_path, "wb") as fout_gbd:
-            self._download_full_gbd(fout_gbd, counts)
-        logger.info(f"GBD guardado en {gbd_path}")
+        logger.info(
+            "[GraphtecCapture] order=%s, counts=%d, bytes/row=%d, module=%s",
+            order,
+            counts,
+            bytes_per_sample,
+            module,
+        )
 
-        # 6) guardar data pura en bin
+        # 5) Descargar datos puros → .bin (sin cabecera #6, ni status, ni checksum)
+        data_bytes = self._download_data_bytes(counts, bytes_per_sample)
         with open(bin_path, "wb") as fout_bin:
-            self._download_data_only(fout_bin, counts)
-        logger.info(f"BIN guardado en {bin_path}")
+            fout_bin.write(data_bytes)
+        logger.info(
+            "[GraphtecCapture] BIN guardado en %s (%d bytes, esperado %d bytes)",
+            bin_path,
+            len(data_bytes),
+            total_bytes_expected,
+        )
 
-        # 7) generar csv con timestamps y unidades físicas
-        self._bin_to_csv(
-            bin_path=bin_path,
+        # 6) Reconstruir GBD: header + padding + datos
+        gbd_bytes = self._build_gbd_file(header_text, data_bytes, header_siz)
+        with open(gbd_path, "wb") as fgbd:
+            fgbd.write(gbd_bytes)
+        logger.info(f"[GraphtecCapture] GBD reconstruido guardado en {gbd_path}")
+
+        # 7) Generar CSV en unidades físicas
+        self._data_to_csv(
+            data_bytes=data_bytes,
             csv_path=csv_path,
             order=order,
-            bytes_per_sample=bytes_per_sample,
             counts=counts,
             start_dt=start_dt,
             delta=sample_delta,
             amp_info=amp_info,
             spans=spans,
+            module=module,
         )
-        logger.info(f"CSV generado en {csv_path}")
+        logger.info(f"[GraphtecCapture] CSV generado en {csv_path}")
 
-        # 8) cerrar trans
+        # 8) Cerrar TRANS
         self.conn.send(":TRANS:CLOSE?")
         self.conn.read_ascii()
 
         return {
             "folder": out_dir,
-            "gbd": gbd_path,
             "hdr": hdr_path,
             "bin": bin_path,
-            "csv": csv_path
+            "gbd": gbd_path,
+            "csv": csv_path,
         }
 
     # ============================================================
-    # leer header trans (#6xxxxxx ascii)
+    # LECTURA DEL HEADER TRANS (#6****** + header ASCII)
     # ============================================================
     def _read_header_trans(self) -> str:
+        """
+        Recibe el header vía :TRANS:OUTP:HEAD?.
+
+        Formato (según Data Reception Specs):
+            "#6******" + HEADER_ASCII
+
+        Sin status ni checksum.
+        """
         block = self.conn.query(":TRANS:OUTP:HEAD?")
         if not isinstance(block, bytes):
-            raise RuntimeError("HEAD devolvió datos no binarios.")
+            raise RuntimeError("[GraphtecCapture] HEAD devolvió datos no binarios.")
 
         block = self._strip_noise(block)
         if not block.startswith(b"#"):
-            raise ValueError("HEAD inválido (no empieza por '#').")
+            raise ValueError("[GraphtecCapture] HEAD inválido (no empieza por '#').")
 
-        nd = int(block[1:2])
-        strlen = int(block[2:2 + nd])
+        nd = int(block[1:2])          # siempre '6'
+        strlen = int(block[2:2 + nd]) # 6 dígitos de longitud
         text = block[2 + nd:2 + nd + strlen]
         return text.decode("ascii", errors="ignore")
 
     # ============================================================
-    # parsers de header
+    # PARSERS DE HEADER (GBD File Specification)
     # ============================================================
     @staticmethod
-    def _extract_order(hdr: str):
-        # capturar bloque entre order y sample (multi-línea)
-        m = re.search(r"Order\s*=\s*(.+?)\n\s*Sample", hdr, flags=re.DOTALL)
-        if not m:
-            return []
-        raw = m.group(1)
-        return [x.strip() for x in raw.split(",")]
+    def _extract_header_size(hdr: str) -> int:
+        """
+        HeaderSiz = 4096
+
+        Tamaño de la región de cabecera en el fichero GBD
+        (múltiplo de 2048).
+        """
+        m = re.search(r"HeaderSiz\s*=\s*(\d+)", hdr)
+        return int(m.group(1)) if m else 4096
 
     @staticmethod
-    def _extract_counts(hdr: str):
+    def _extract_order(hdr: str):
+        """
+        Extrae Order del bloque $$Data del header GBD.
+
+        $$Data
+          Format    = BinaryData
+          Type      = BigEndian, Short, Setup
+          Order     = CH1  , CH2  , CH3  , CH4  , Logic, Alarm1 , AlarmLP, AlarmOut
+        """
+        m = re.search(
+            r"\$\$Data(.*?)(?:\$\$|\$EndHeader)",
+            hdr,
+            flags=re.DOTALL | re.MULTILINE,
+        )
+        if not m:
+            return []
+
+        data_block = m.group(1)
+
+        m2 = re.search(
+            r"^\s*Order\s*=\s*(.+)$",
+            data_block,
+            flags=re.MULTILINE,
+        )
+        if not m2:
+            return []
+
+        raw = m2.group(1)
+        return [x.strip() for x in raw.split(",") if x.strip()]
+
+    @staticmethod
+    def _extract_counts(hdr: str) -> int:
         m = re.search(r"Counts\s*=\s*(\d+)", hdr)
         return int(m.group(1)) if m else 0
 
     @staticmethod
     def _extract_sample_delta(hdr: str) -> timedelta:
+        """
+        Sample = 500ms, 1s, 10m, etc.
+        """
         m = re.search(r"Sample\s*=\s*([0-9]+)\s*([a-zA-Z]+)", hdr)
         if not m:
             return timedelta(seconds=1)
@@ -245,21 +316,33 @@ class GL100Capture:
         if not m:
             return None
         try:
-            return datetime.strptime(m.group(1) + " " + m.group(2), "%Y-%m-%d %H:%M:%S")
+            return datetime.strptime(
+                m.group(1) + " " + m.group(2), "%Y-%m-%d %H:%M:%S"
+            )
         except Exception:
             return None
 
     @staticmethod
     def _extract_amp_info(hdr: str):
         """
-        parsea bloque $Amp:
-            CH1 = VT , TEMP , 10V, Off , TC_K, +0
-        devuelve dict:
-            {"CH1": {"type":"VT","input":"TEMP","range":"10V","tc":"TC_K"}, ...}
+        Bloque $Amp:
+
+          CH1        = VT   , DC   ,       5V, Off   ,    Off,      +0
+          CH2        = VT   , DC   ,       5V, Off   ,    Off,      +0
+          ...
+
+        Devuelve:
+            {
+              "CH1": {"type": "VT", "input": "DC", "range": "5V"},
+              ...
+            }
         """
         amp = {}
         for ch in ["CH1", "CH2", "CH3", "CH4"]:
-            m = re.search(rf"{ch}\s*=\s*([^,\n]+),\s*([^,\n]+),\s*([^,\n]+),.*", hdr)
+            m = re.search(
+                rf"{ch}\s*=\s*([^,\n]+),\s*([^,\n]+),\s*([^,\n]+),.*",
+                hdr,
+            )
             if m:
                 amp[ch] = {
                     "type": m.group(1).strip(),
@@ -271,9 +354,14 @@ class GL100Capture:
     @staticmethod
     def _extract_spans(hdr: str):
         """
-        parsea $$Span:
-            CH1 = -2000, +20000
-        devuelve dict {"CH1": (-2000, 20000), ...}
+        Bloque $$Span:
+
+          CH1        =  -10000, +10000
+          CH2        =  -10000, +10000
+          ...
+
+        Devuelve:
+            {"CH1": (-10000, 10000), ...}
         """
         spans = {}
         for ch in ["CH1", "CH2", "CH3", "CH4"]:
@@ -282,37 +370,97 @@ class GL100Capture:
                 spans[ch] = (int(m.group(1)), int(m.group(2)))
         return spans
 
-    # ============================================================
-    # descarga gbd completo (bloques crudos)
-    # ============================================================
-    def _download_full_gbd(self, fout, total):
-        first = 1
-        chunk = 1000
-        while first <= total:
-            last = min(first + chunk - 1, total)
-            self.conn.send(f":TRANS:OUTP:DATA {first},{last}")
-            block = self.conn.query(":TRANS:OUTP:DATA?")
-            fout.write(block)
-            first = last + 1
+    @staticmethod
+    def _extract_module(hdr: str) -> str:
+        """
+        UnitOrder = 4VT
+        -> "GS-4VT", etc.
+        """
+        m = re.search(r"UnitOrder\s*=\s*([A-Za-z0-9\-\_]+)", hdr)
+        if not m:
+            return "UNKNOWN"
+
+        raw = m.group(1).strip().upper()
+
+        mapping = {
+            "4VT": "GS-4VT",
+            "4TSR": "GS-4TSR",
+            "3AT": "GS-3AT",
+            "TH": "GS-TH",
+            "LXUV": "GS-LXUV",
+            "CO2": "GS-CO2",
+            "DPA-AC": "GS-DPA-AC",
+            "DPAC": "GS-DPA-AC",
+        }
+
+        return mapping.get(raw, raw)
 
     # ============================================================
-    # descarga solo data pura para bin
+    # DESCARGA DE DATOS PUROS (BIN) VÍA TRANS
     # ============================================================
-    def _download_data_only(self, fout, total):
+    def _download_data_bytes(self, counts: int, bytes_per_sample: int) -> bytes:
+        """
+        Descarga la región de datos completa usando:
+
+            :TRANS:OUTP:DATA <START>,<END>
+            :TRANS:OUTP:DATA?
+
+        y devuelve exclusivamente la parte de datos (Data) de los
+        bloques #6****** (sin status ni checksum), concatenada.
+
+        Se asegura de no devolver más de counts * bytes_per_sample bytes.
+        """
+        target_bytes = counts * bytes_per_sample
+        buf = bytearray()
+
         first = 1
-        chunk = 1000
-        while first <= total:
-            last = min(first + chunk - 1, total)
+        chunk_samples = 1000  # tamaño razonable
+
+        while first <= counts and len(buf) < target_bytes:
+            last = min(first + chunk_samples - 1, counts)
             self.conn.send(f":TRANS:OUTP:DATA {first},{last}")
             block = self.conn.query(":TRANS:OUTP:DATA?")
+
+            if not isinstance(block, bytes):
+                # Si algo raro pasa, lo ignoramos y salimos
+                logger.error("[GraphtecCapture] TRANS:OUTP:DATA? devolvió datos no binarios.")
+                break
+
             data = self._extract_binary_data(block)
-            fout.write(data)
+            buf.extend(data)
+
             first = last + 1
 
+        # Ajustar a tamaño esperado
+        if len(buf) > target_bytes:
+            logger.warning(
+                "[GraphtecCapture] Recibidos %d bytes, truncando a %d bytes.",
+                len(buf),
+                target_bytes,
+            )
+            buf = buf[:target_bytes]
+        elif len(buf) < target_bytes:
+            logger.warning(
+                "[GraphtecCapture] Recibidos solo %d bytes (esperados %d).",
+                len(buf),
+                target_bytes,
+            )
+
+        return bytes(buf)
+
     # ============================================================
-    # extraer data pura de un bloque #6xxxxxx
+    # EXTRAER DATA PURA DE UN BLOQUE #6******
     # ============================================================
     def _extract_binary_data(self, block: bytes) -> bytes:
+        """
+        Bloque DATA (según Data Reception):
+
+          "#6******" + STATUS(2) + DATA(N) + CHECKSUM(2)
+
+        Donde ****** = N (tamaño de DATA).
+
+        Esta función devuelve solo DATA.
+        """
         block = self._strip_noise(block)
 
         if not block.startswith(b"#"):
@@ -321,151 +469,289 @@ class GL100Capture:
                 text = block.decode("ascii", errors="ignore").strip()
             except Exception:
                 text = "?"
-            logger.warning(f"[GL100Capture] bloque ascii recibido: {text}")
+            logger.warning(f"[GraphtecCapture] bloque ascii recibido: {text}")
             return b""
 
-        nd = int(block[1:2])
-        strlen = int(block[2:2 + nd])
+        nd = int(block[1:2])          # '6'
+        strlen = int(block[2:2 + nd]) # longitud de DATA en bytes
         offset = 2 + nd
         remaining = len(block) - offset
 
-        # caso a: solo data
+        # HEAD no tiene status/checksum: remaining == strlen
         if remaining == strlen:
             return block[offset:offset + strlen]
 
-        # caso b: status + data + checksum
+        # DATA: STATUS(2) + DATA(strlen) + CHECKSUM(2)
         if remaining >= strlen + 4:
-            offset += 2  # saltar status
+            offset += 2  # saltar STATUS
             return block[offset:offset + strlen]
 
-        logger.warning("[GL100Capture] bloque truncado.")
+        logger.warning("[GraphtecCapture] bloque truncado.")
         return b""
 
     @staticmethod
     def _strip_noise(block: bytes) -> bytes:
+        """
+        Busca el primer '#' y descarta basura anterior.
+        """
         idx = block.find(b"#")
         return block[idx:] if idx != -1 else block
 
     # ============================================================
-    # conversión física por tipo (opción b)
+    # RECONSTRUCCIÓN DE GBD
     # ============================================================
-    def _convert_row_physical(self, order, raw_row, amp_info, spans):
+    def _build_gbd_file(self, header_text: str, data_bytes: bytes, header_siz: int) -> bytes:
+        """
+        Reconstruye un archivo GBD:
+
+          [Header region] + [Padding hasta HeaderSiz] + [Data region]
+
+        Header region: texto ASCII tal cual devuelto por HEAD.
+        Padding: espacios (0x20) hasta HeaderSiz bytes totales.
+        """
+        header_bytes = header_text.encode("ascii", errors="ignore")
+
+        if len(header_bytes) > header_siz:
+            logger.warning(
+                "[GraphtecCapture] header_bytes (%d) > HeaderSiz (%d). "
+                "Guardando sin recortar (puede no ser estándar).",
+                len(header_bytes),
+                header_siz,
+            )
+            padded = header_bytes
+        else:
+            pad_len = header_siz - len(header_bytes)
+            padded = header_bytes + b" " * pad_len
+
+        return padded + data_bytes
+
+    # ============================================================
+    # CONVERSIÓN FÍSICA (GS-4VT Y RESTO)
+    # ============================================================
+    @staticmethod
+    def _convert_4vt_voltage(raw_val: int, rng: str) -> float:
+        """
+        Conversión EXACTA según "2.2 Binary translation of voltage data
+        of 4ch voltage temperature (GS-4VT)".
+
+        1) Escalado base (1, 2, 5)
+        2) Ajuste de punto decimal (V)
+
+        Se asume que queremos siempre la salida en Voltios.
+        """
+        rng_norm = (rng or "").upper().replace(" ", "")
+
+        # Factor base (1 / 2 / 4)
+        base_factor = None
+        # Rangos base '1': 100mV / 1V / 10V
+        if rng_norm in ("100MV", "1V", "10V"):
+            base_factor = 2
+        # Rangos base '2': 20mV / 200mV / 2V / 20V
+        elif rng_norm in ("20MV", "200MV", "2V", "20V"):
+            base_factor = 1
+        # Rangos base '5': 50mV / 500mV / 5V / 50V / 1-5V
+        elif rng_norm in ("50MV", "500MV", "5V", "50V", "1-5V", "1TO5V", "1-5VDC"):
+            base_factor = 4
+
+        if base_factor is None:
+            # Rango desconocido → devolvemos raw sin escalar
+            return float(raw_val)
+
+        # Ajuste de punto decimal (siempre a V)
+        dec_factor = None
+        if rng_norm == "20MV":
+            dec_factor = 1_000_000
+        elif rng_norm in ("50MV", "100MV", "200MV"):
+            dec_factor = 100_000
+        elif rng_norm in ("500MV", "1V", "2V"):
+            dec_factor = 10_000
+        elif rng_norm in ("5V", "10V", "20V", "1-5V", "1TO5V", "1-5VDC"):
+            dec_factor = 1_000
+        elif rng_norm == "50V":
+            dec_factor = 100
+
+        if dec_factor is None:
+            return float(raw_val)
+
+        return raw_val / (base_factor * dec_factor)
+
+    def _convert_value(self, module, inp, rng, span, raw_val):
+        """
+        Conversión física unificada para todos los módulos GL100.
+
+        - GS-4VT: fórmulas oficiales (sin spans)
+        - Resto: conversión lineal por spans + ajustes heurísticos
+        """
+        module = (module or "UNKNOWN").upper()
+        inp = (inp or "").upper()
+        rng = (rng or "").upper()
+
+        # ---------------------- GS-4VT ---------------------------
+        if module.startswith("GS-4VT"):
+            if inp in ("DC", "DC_V", "V", "VT", "MV"):
+                return self._convert_4vt_voltage(raw_val, rng)
+
+            # Temperatura por termopar (2.3 Temperature data):
+            # [Temperature (°C)] = [Temperature data] / 10
+            if inp == "TEMP":
+                return raw_val / 10.0
+
+            # Logic / Pulse / Alarm → devolver raw
+            return float(raw_val)
+
+        # ---------------------- Resto de módulos -----------------
+        smin, smax = span
+
+        # Conversión lineal Graphtec en unidades de ingeniería del span
+        phys = smin + ((raw_val + 32768) * (smax - smin) / 65535.0)
+
+        # GS-TH
+        if module.startswith("GS-TH"):
+            if inp == "TEMP":
+                return phys / 100.0
+            if inp in ("HUM", "HUMID", "RH"):
+                return phys / 100.0
+            if inp == "DEW":
+                return phys / 100.0
+            return phys
+
+        # GS-3AT
+        if module.startswith("GS-3AT"):
+            if inp == "ACC":
+                return phys / 1000.0
+            if inp == "TEMP":
+                return phys / 100.0
+            return phys
+
+        # GS-LXUV
+        if module.startswith("GS-LXUV"):
+            if inp in ("LUX", "UV"):
+                return phys / 1000.0
+            return phys
+
+        # GS-CO2
+        if module.startswith("GS-CO2"):
+            return phys
+
+        # GS-DPA-AC
+        if module.startswith("GS-DPA-AC"):
+            if "A" in inp:
+                return phys / 1000.0
+            return phys
+
+        # GS-4TSR
+        if module.startswith("GS-4TSR"):
+            return phys / 100.0
+
+        return phys
+
+    def _convert_row_physical(self, module, order, raw_row, amp_info, spans):
+        """
+        Convierte una fila de datos crudos (lista de enteros 16-bit)
+        en unidades físicas, respetando el Order del header.
+        """
         out = []
         for name, raw_val in zip(order, raw_row):
             n = name.strip()
 
-            # alarmas u otros → sin conversión
+            # No canal (Logic, Alarm, etc.) → dejar raw
             if not n.startswith("CH"):
                 out.append(raw_val)
                 continue
 
-            # si no hay span, devolver crudo
-            if n not in spans:
-                out.append(raw_val)
-                continue
-
-            smin, smax = spans[n]
-
-            # conversión lineal graphtec en unidades de ingeniería del span
-            phys = smin + ((raw_val + 32768) * (smax - smin) / 65535)
-
-            # ajustar según tipo/rango si hace falta
+            span = spans.get(n, (0, 1))
             info = amp_info.get(n, {})
-            inp = (info.get("input") or "").upper()
-            rng = (info.get("range") or "").upper()
+            inp = info.get("input") or ""
+            rng = info.get("range") or ""
 
-            # temp → el span ya está en ºc según gl100
-            if inp == "TEMP":
-                out.append(phys / 100.0 if abs(smax) > 1000 else phys)  # heurística típica graphtec
-                continue
-
-            # dc / voltaje → span ya está en voltios o milivoltios
-            if inp in ("DC", "DC_V", "V"):
-                # si el rango es mV, pasamos a voltios
-                if "MV" in rng:
-                    out.append(phys / 1000.0)
-                else:
-                    out.append(phys / 1000.0 if abs(smax) > 1000 else phys)
-                continue
-
-            # acc, humid, etc. quedan como phys
-            out.append(phys)
+            val = self._convert_value(
+                module=module,
+                inp=inp,
+                rng=rng,
+                span=span,
+                raw_val=raw_val,
+            )
+            out.append(val)
 
         return out
 
     def _build_column_names_with_units(self, order, amp_info):
         cols = []
         for n in order:
-            if not n.startswith("CH"):
-                cols.append(n.strip())
+            name = n.strip()
+            if not name.startswith("CH"):
+                cols.append(name)
                 continue
 
-            info = amp_info.get(n.strip(), {})
+            info = amp_info.get(name, {})
             inp = (info.get("input") or "").upper()
-            rng = (info.get("range") or "").upper()
 
             if inp == "TEMP":
-                cols.append(f"{n.strip()}_C")
-            elif inp in ("DC", "DC_V", "V"):
-                cols.append(f"{n.strip()}_V")
+                cols.append(f"{name}_C")
+            elif inp in ("DC", "DC_V", "V", "VT", "MV"):
+                cols.append(f"{name}_V")
             elif inp == "ACC":
-                cols.append(f"{n.strip()}_G")
+                cols.append(f"{name}_G")
+            elif inp in ("HUM", "HUMID", "RH"):
+                cols.append(f"{name}_RH")
             else:
-                cols.append(n.strip())
+                cols.append(name)
 
         return cols
 
     # ============================================================
-    # generar csv final
+    # GENERACIÓN DEL CSV
     # ============================================================
-    def _bin_to_csv(
+    def _data_to_csv(
         self,
-        bin_path,
-        csv_path,
+        data_bytes: bytes,
+        csv_path: str,
         order,
-        bytes_per_sample,
-        counts,
+        counts: int,
         start_dt,
         delta,
         amp_info,
         spans,
+        module,
     ):
-        with open(bin_path, "rb") as f:
-            raw = f.read()
+        """
+        Convierte data_bytes (pure data, 16-bit big-endian) en CSV.
+        """
+        n_items = len(order)
+        bytes_per_sample = n_items * 2
 
-        # leer filas crudas
-        rows_raw = []
-        pos = 0
-        for _ in range(counts):
-            if pos + bytes_per_sample > len(raw):
-                break
-            row = []
-            for i in range(len(order)):
-                val = struct.unpack_from(">h", raw, pos + i * 2)[0]
-                row.append(val)
-            rows_raw.append(row)
-            pos += bytes_per_sample
+        total_bytes = len(data_bytes)
+        max_samples_from_bytes = total_bytes // bytes_per_sample
+        n_samples = min(counts, max_samples_from_bytes)
 
-        # convertir a físicas
-        rows_phys = [
-            self._convert_row_physical(order, r, amp_info, spans)
-            for r in rows_raw
-        ]
+        if max_samples_from_bytes < counts:
+            logger.warning(
+                "[GraphtecCapture] Solo hay datos para %d muestras (header indicaba %d).",
+                max_samples_from_bytes,
+                counts,
+            )
+
+        rows_phys = []
+        for i in range(n_samples):
+            base = i * bytes_per_sample
+            raw_row = struct.unpack_from(f">{n_items}h", data_bytes, base)
+            phys_row = self._convert_row_physical(module, order, raw_row, amp_info, spans)
+            rows_phys.append(phys_row)
 
         # timestamps
         if start_dt is None:
-            timestamps = ["" for _ in range(len(rows_phys))]
+            timestamps = ["" for _ in range(n_samples)]
         else:
-            timestamps = [start_dt + i * delta for i in range(len(rows_phys))]
+            timestamps = [start_dt + i * delta for i in range(n_samples)]
 
         cols = self._build_column_names_with_units(order, amp_info)
 
-        # escribir csv limpio
+        # escribir CSV
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             w.writerow(["TimeStamp"] + cols)
             for ts, row in zip(timestamps, rows_phys):
                 if ts == "":
-                    w.writerow([""] + row)
+                    w.writerow([""] + list(row))
                 else:
-                    w.writerow([ts.isoformat()] + row)
+                    w.writerow([ts.isoformat()] + list(row))  # type: ignore

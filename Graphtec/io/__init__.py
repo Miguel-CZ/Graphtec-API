@@ -7,7 +7,7 @@ Módulos de entrada/salida de datos (I/O) para GL100
 - capture: descarga y lectura de datos almacenados (memoria o SD).
 """
 
-from graphtec.io.realtime import GL100Realtime
-from graphtec.io.capture import GL100Capture
+from graphtec.io.realtime import GraphtecRealtime
+from graphtec.io.capture import GraphtecCapture
 
-__all__ = ["GL100Realtime", "GL100Capture"]
+__all__ = ["GraphtecRealtime", "GraphtecCapture"]

@@ -4,7 +4,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-class GL100Realtime:
+class GraphtecRealtime:
     """
     Módulo de lectura en tiempo real del GL100.
     """

@@ -9,17 +9,17 @@ Contiene las clases y utilidades esenciales para manejar el dispositivo:
 
 import logging
 logger = logging.getLogger(__name__)
-from .device import GL100Device
+from .device import GraphtecDevice
 from .exceptions import (
-    GL100Error,
+    GraphtecError,
     ConnectionError,
     CommandError,
     DataError,
 )
 
 __all__ = [
-    "GL100Device",
-    "GL100Error",
+    "GraphtecDevice",
+    "GraphtecError",
     "ConnectionError",
     "CommandError",
     "DataError",

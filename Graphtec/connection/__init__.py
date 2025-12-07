@@ -1,9 +1,9 @@
-from graphtec.connection.usb_connection import USBConnection
+from graphtec.connection.serial_connection import SerialConnection
 from graphtec.connection.wlan_connection import WLANConnection
 import logging
 logger = logging.getLogger(__name__)
 
-def GL100Connection(conn_type="usb", **kwargs):
+def GraphtecConnection(conn_type="usb", **kwargs):
     """
     Método fabricación para la conexión.
     Se contempla por Serial y por WLAN.
@@ -19,7 +19,7 @@ def GL100Connection(conn_type="usb", **kwargs):
     lan_aliases = ["wlan","lan", "ethernet", "net", "tcp", "ip", "wifi"]
 
     if conn_type in usb_aliases:
-        return USBConnection(**kwargs)
+        return SerialConnection(**kwargs)
     elif conn_type in lan_aliases:
         return WLANConnection(**kwargs)
     else:
