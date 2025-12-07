@@ -133,6 +133,7 @@ class Graphtec:
             filename (str): Nombre del archivo en el dispositivo.
             dest_path (str): Ruta local donde guardar el archivo.
         """
+        self.device.connection.flush_buffer()
         return self.capture.download_file(path_in_gl, dest_folder)
     
     

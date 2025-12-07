@@ -127,6 +127,7 @@ class GraphtecCapture:
 
         # 2) Abrir TRANS
         resp = self.conn.query(":TRANS:OPEN?")
+        logger.debug(f"[GraphtecCapture] Respuesta apertura Trans: {resp}")
         ok = False
         if isinstance(resp, bytes) and len(resp) == 3:
             # bit 0 de tercer byte = error
@@ -176,6 +177,7 @@ class GraphtecCapture:
 
         # 5) Descargar datos puros → .bin (sin cabecera #6, ni status, ni checksum)
         data_bytes = self._download_data_bytes(counts, bytes_per_sample)
+
         with open(bin_path, "wb") as fout_bin:
             fout_bin.write(data_bytes)
         logger.info(
@@ -230,6 +232,7 @@ class GraphtecCapture:
         Sin status ni checksum.
         """
         block = self.conn.query(":TRANS:OUTP:HEAD?")
+        logger.debug(f"[GraphtecCapture] Bloque HEAD recibido: {block}")
         if not isinstance(block, bytes):
             raise RuntimeError("[GraphtecCapture] HEAD devolvió datos no binarios.")
 
@@ -260,11 +263,6 @@ class GraphtecCapture:
     def _extract_order(hdr: str):
         """
         Extrae Order del bloque $$Data del header GBD.
-
-        $$Data
-          Format    = BinaryData
-          Type      = BigEndian, Short, Setup
-          Order     = CH1  , CH2  , CH3  , CH4  , Logic, Alarm1 , AlarmLP, AlarmOut
         """
         m = re.search(
             r"\$\$Data(.*?)(?:\$\$|\$EndHeader)",
@@ -420,10 +418,14 @@ class GraphtecCapture:
             last = min(first + chunk_samples - 1, counts)
             self.conn.send(f":TRANS:OUTP:DATA {first},{last}")
             block = self.conn.query(":TRANS:OUTP:DATA?")
+            logger.debug(
+                f"[GraphtecCapture] Bloque DATA recibido ({first}-{last}): {block}"
+            )
 
             if not isinstance(block, bytes):
-                # Si algo raro pasa, lo ignoramos y salimos
-                logger.error("[GraphtecCapture] TRANS:OUTP:DATA? devolvió datos no binarios.")
+                logger.error(
+                    "[GraphtecCapture] TRANS:OUTP:DATA? devolvió datos no binarios."
+                )
                 break
 
             data = self._extract_binary_data(block)
@@ -457,9 +459,10 @@ class GraphtecCapture:
 
           "#6******" + STATUS(2) + DATA(N) + CHECKSUM(2)
 
-        Donde ****** = N (tamaño de DATA).
+        Donde ****** = N (tamaño de DATA). HEAD/MEAS no llevan STATUS/CHECKSUM.
 
-        Esta función devuelve solo DATA.
+        Esta función devuelve solo DATA (N bytes). Verifica status y checksum
+        si están presentes.
         """
         block = self._strip_noise(block)
 
@@ -473,20 +476,52 @@ class GraphtecCapture:
             return b""
 
         nd = int(block[1:2])          # '6'
-        strlen = int(block[2:2 + nd]) # longitud de DATA en bytes
+        strlen = int(block[2:2 + nd]) # longitud de DATA en bytes (N)
         offset = 2 + nd
         remaining = len(block) - offset
 
-        # HEAD no tiene status/checksum: remaining == strlen
+        # HEAD/MEAS: "#6******" + DATA(N)
         if remaining == strlen:
             return block[offset:offset + strlen]
 
-        # DATA: STATUS(2) + DATA(strlen) + CHECKSUM(2)
+        # DATA de TRANS: "#6******" + STATUS(2) + DATA(N) + CHECKSUM(2)
         if remaining >= strlen + 4:
-            offset += 2  # saltar STATUS
-            return block[offset:offset + strlen]
+            # STATUS
+            status_bytes = block[offset:offset + 2]
+            if len(status_bytes) == 2:
+                status_val = struct.unpack(">H", status_bytes)[0]
+                # Bit 0 = error / bits 1 y 2 para START/END según manual
+                if status_val & 0x0001:
+                    logger.error(
+                        f"[GraphtecCapture] STATUS de TRANS indica error (0x{status_val:04X})."
+                    )
+                if status_val & 0x0002:
+                    logger.error(
+                        f"[GraphtecCapture] Error en posición END (STATUS=0x{status_val:04X})."
+                    )
+                if status_val & 0x0004:
+                    logger.error(
+                        f"[GraphtecCapture] Error en posición START (STATUS=0x{status_val:04X})."
+                    )
 
-        logger.warning("[GraphtecCapture] bloque truncado.")
+            data_start = offset + 2
+            data_end = data_start + strlen
+            data = block[data_start:data_end]
+
+            # CHECKSUM
+            checksum_bytes = block[data_end:data_end + 2]
+            if len(checksum_bytes) == 2:
+                checksum_rx = struct.unpack(">H", checksum_bytes)[0]
+                checksum_calc = sum(data) & 0xFFFF
+                if checksum_calc != checksum_rx:
+                    logger.error(
+                        "[GraphtecCapture] Checksum inválido: "
+                        f"calc=0x{checksum_calc:04X}, recv=0x{checksum_rx:04X}"
+                    )
+
+            return data
+
+        logger.warning("[GraphtecCapture] bloque truncado en _extract_binary_data.")
         return b""
 
     @staticmethod
@@ -529,15 +564,35 @@ class GraphtecCapture:
     # CONVERSIÓN FÍSICA (GS-4VT Y RESTO)
     # ============================================================
     @staticmethod
+    def _decode_special(raw: int):
+        """
+        Códigos especiales GL100 (idénticos a real-time):
+          -0x7fff : UnderFS
+           0x7ffc : OverFS
+           0x7ffd : Burnout
+           0x7ffe : Off
+           0x7fff : CalcError
+        """
+        if raw == 0x7fff:
+            return None, "CalcError"
+        if raw == 0x7ffe:
+            return None, "Off"
+        if raw == 0x7ffd:
+            return None, "Burnout"
+        if raw == 0x7ffc:
+            return None, "OverFS"
+        if raw == -0x7fff:
+            return None, "UnderFS"
+        return raw, None
+
+    @staticmethod
     def _convert_4vt_voltage(raw_val: int, rng: str) -> float:
         """
         Conversión EXACTA según "2.2 Binary translation of voltage data
         of 4ch voltage temperature (GS-4VT)".
 
-        1) Escalado base (1, 2, 5)
-        2) Ajuste de punto decimal (V)
-
-        Se asume que queremos siempre la salida en Voltios.
+        1) Escalado base (1, 2, 5) → factores 1 / 2 / 4
+        2) Ajuste de punto decimal → siempre a Voltios
         """
         rng_norm = (rng or "").upper().replace(" ", "")
 
@@ -602,7 +657,7 @@ class GraphtecCapture:
         # ---------------------- Resto de módulos -----------------
         smin, smax = span
 
-        # Conversión lineal Graphtec en unidades de ingeniería del span
+        # Conversión lineal Graphtec en unidades del span
         phys = smin + ((raw_val + 32768) * (smax - smin) / 65535.0)
 
         # GS-TH
@@ -649,14 +704,23 @@ class GraphtecCapture:
         """
         Convierte una fila de datos crudos (lista de enteros 16-bit)
         en unidades físicas, respetando el Order del header.
+
+        Aplica también los códigos especiales del GL100.
         """
         out = []
         for name, raw_val in zip(order, raw_row):
             n = name.strip()
 
-            # No canal (Logic, Alarm, etc.) → dejar raw
+            # Campos no canal (Logic, Alarm, etc.) → dejar raw tal cual
             if not n.startswith("CH"):
                 out.append(raw_val)
+                continue
+
+            # Tratar códigos especiales
+            val_raw, flag = self._decode_special(raw_val)
+            if val_raw is None:
+                # Error / burnout / overFS / etc. → dejamos celda vacía
+                out.append(None)
                 continue
 
             span = spans.get(n, (0, 1))
@@ -669,7 +733,7 @@ class GraphtecCapture:
                 inp=inp,
                 rng=rng,
                 span=span,
-                raw_val=raw_val,
+                raw_val=val_raw,
             )
             out.append(val)
 
@@ -735,7 +799,9 @@ class GraphtecCapture:
         for i in range(n_samples):
             base = i * bytes_per_sample
             raw_row = struct.unpack_from(f">{n_items}h", data_bytes, base)
-            phys_row = self._convert_row_physical(module, order, raw_row, amp_info, spans)
+            phys_row = self._convert_row_physical(
+                module, order, raw_row, amp_info, spans
+            )
             rows_phys.append(phys_row)
 
         # timestamps
