@@ -4,19 +4,33 @@ import csv
 import struct
 import logging
 from datetime import datetime, timedelta
+from typing import List, Dict, Tuple, Optional, Any
+
+from graphtec.io.decoder import (
+    parse_head_block,
+    extract_trans_data_block,
+    convert_row_physical,
+    build_column_names_with_units,
+)
 
 logger = logging.getLogger(__name__)
+
+try:
+    from openpyxl import Workbook
+except ImportError:
+    Workbook = None  # type: ignore
 
 
 class GraphtecCapture:
     """
-    Descarga archivos GBD del GL100 usando TRANS y genera:
+    Descarga archivos de medida del GL100 vía TRANS y genera:
 
         <nombre>/
             <nombre>.hdr   (header ASCII del GBD)
             <nombre>.bin   (datos puros concatenados, 16-bit big-endian)
-            <nombre>.gbd   (GBD reconstruido según especificación oficial)
+            <nombre>.GBD   (GBD reconstruido según especificación oficial)
             <nombre>.csv   (timestamp + valores en unidades físicas)
+            <nombre>.xlsx  (igual que CSV pero en Excel)
 
     Basado en:
       - GL100 Data Reception Specifications (TRANS / #6****** / status / checksum)
@@ -30,17 +44,17 @@ class GraphtecCapture:
     # ============================================================
     # LISTADO DE ARCHIVOS
     # ============================================================
-    def list_files(self, path="\\MEM\\LOG\\", long=True, filt="OFF"):
+    def list_files(self, path: str = "\\MEM\\LOG\\", long: bool = True, filt: str = "OFF") -> List[str]:
         """
         Lista archivos en un directorio del dispositivo (DISK).
 
         Args:
-            path (str): ruta en el Graphtec, ej. "\\MEM\\LOG\\"
-            long (bool): formato LONG (con tamaño/fecha) o SHORT
-            filt (str|OFF): filtrar por extensión ("GBD") o OFF
+            path: ruta en el Graphtec, ej. "\\MEM\\LOG\\"
+            long: formato LONG (con tamaño/fecha) o SHORT
+            filt: filtrar por extensión ("GBD") o "OFF"
 
         Returns:
-            list[str]: nombres de archivo (sin carpetas)
+            Lista de nombres de archivo (sin carpetas).
         """
         # Cambiar de carpeta
         self.conn.send(f':FILE:CD "{path}"')
@@ -58,7 +72,7 @@ class GraphtecCapture:
         else:
             self.conn.send(":FILE:LIST:FILT OFF")
 
-        # Obtener list
+        # Obtener listado
         raw = self.conn.query(":FILE:LIST?")
 
         if not isinstance(raw, str):
@@ -71,10 +85,10 @@ class GraphtecCapture:
         return self._parse_file_list(raw)
 
     @staticmethod
-    def _parse_file_list(list_text: str):
+    def _parse_file_list(list_text: str) -> List[str]:
         """
         Extrae los nombres entre comillas.
-        Ignora carpetas (terminan en '\').
+        Ignora carpetas (terminan en '\\').
         """
         if not list_text:
             return []
@@ -86,7 +100,7 @@ class GraphtecCapture:
         if not items:
             return []
 
-        clean = []
+        clean: List[str] = []
         for it in items:
             if it.endswith("\\"):  # carpeta
                 continue
@@ -95,30 +109,158 @@ class GraphtecCapture:
         return clean
 
     # ============================================================
-    # PIPELINE COMPLETO: HDR + BIN + GBD + CSV
+    # API PÚBLICA DE DESCARGA
     # ============================================================
-    def download_file(self, path_in_gl: str, dest_folder: str):
+    def download_file(self, path_in_gl: str, dest_folder: str) -> Optional[Dict[str, str]]:
         """
-        Descarga un archivo de medida del GL100 vía TRANS y genera:
+        Descarga un archivo de medida del GL100 y genera:
+
           - .hdr (header ASCII)
           - .bin (datos puros 16-bit big-endian)
-          - .gbd (archivo GBD reconstruido, compatible con el software oficial)
-          - .csv (datos en unidades físicas)
+          - .GBD (archivo GBD reconstruido, compatible con el software oficial)
+
 
         Args:
-            path_in_gl (str): ruta completa en el GL100, p.ej. "\\MEM\\LOG\\251130-110423.GBD"
-            dest_folder (str): carpeta local destino.
+            path_in_gl: ruta completa en el GL100, p.ej. "\\MEM\\LOG\\251130-110423.GBD"
+            dest_folder: carpeta local destino.
+        """
+        core = self._download_core(path_in_gl, dest_folder)
+        if core is None:
+            return None
+
+        folder = core["folder"]
+        base_name = core["base_name"]
+        hdr_path = core["hdr_path"]
+        bin_path = core["bin_path"]
+        header_text = core["header_text"]
+        data_bytes = core["data_bytes"]
+        header_siz = core["header_siz"]
+
+        gbd_path = os.path.join(folder, base_name + ".GBD")
+        gbd_bytes = self._build_gbd_file(header_text, data_bytes, header_siz)
+        with open(gbd_path, "wb") as fgbd:
+            fgbd.write(gbd_bytes)
+        logger.info(f"[GraphtecCapture] GBD reconstruido guardado en {gbd_path}")
+
+        return {
+            "folder": folder,
+            "hdr": hdr_path,
+            "bin": bin_path,
+            "gbd": gbd_path,
+        }
+
+    def download_csv(self, path_in_gl: str, dest_folder: str) -> Optional[Dict[str, str]]:
+        """
+        Descarga un archivo de medida del GL100 y genera:
+
+          - .hdr (header ASCII)
+          - .bin (datos puros 16-bit big-endian)
+          - .csv (datos en unidades físicas)
+
+        NO genera GBD ni Excel.
+        """
+        core = self._download_core(path_in_gl, dest_folder)
+        if core is None:
+            return None
+
+        folder = core["folder"]
+        base_name = core["base_name"]
+        hdr_path = core["hdr_path"]
+        bin_path = core["bin_path"]
+
+        csv_path = os.path.join(folder, base_name + ".csv")
+
+        self._data_to_csv(
+            data_bytes=core["data_bytes"],
+            csv_path=csv_path,
+            order=core["order"],
+            counts=core["counts"],
+            start_dt=core["start_dt"],
+            delta=core["sample_delta"],
+            amp_info=core["amp_info"],
+            spans=core["spans"],
+            module=core["module"],
+        )
+        logger.info(f"[GraphtecCapture] CSV generado en {csv_path}")
+
+        return {
+            "folder": folder,
+            "hdr": hdr_path,
+            "bin": bin_path,
+            "csv": csv_path,
+        }
+
+    def download_excel(self, path_in_gl: str, dest_folder: str) -> Optional[Dict[str, str]]:
+        """
+        Descarga un archivo de medida del GL100 y genera:
+
+          - .hdr (header ASCII)
+          - .bin (datos puros 16-bit big-endian)
+          - .xlsx (datos en unidades físicas, formato Excel)
+
+        NO genera GBD ni CSV.
+        """
+        if Workbook is None:
+            raise RuntimeError(
+                "openpyxl no está instalado. "
+                "Instala 'openpyxl' para poder usar download_excel()."
+            )
+
+        core = self._download_core(path_in_gl, dest_folder)
+        if core is None:
+            return None
+
+        folder = core["folder"]
+        base_name = core["base_name"]
+        hdr_path = core["hdr_path"]
+        bin_path = core["bin_path"]
+
+        xlsx_path = os.path.join(folder, base_name + ".xlsx")
+
+        self._data_to_excel(
+            data_bytes=core["data_bytes"],
+            xlsx_path=xlsx_path,
+            order=core["order"],
+            counts=core["counts"],
+            start_dt=core["start_dt"],
+            delta=core["sample_delta"],
+            amp_info=core["amp_info"],
+            spans=core["spans"],
+            module=core["module"],
+        )
+        logger.info(f"[GraphtecCapture] Excel generado en {xlsx_path}")
+
+        return {
+            "folder": folder,
+            "hdr": hdr_path,
+            "bin": bin_path,
+            "xlsx": xlsx_path,
+        }
+
+    # ============================================================
+    # PIPELINE CORE: TRANS + HEADER + DATA
+    # ============================================================
+    def _download_core(self, path_in_gl: str, dest_folder: str) -> Optional[Dict[str, Any]]:
+        """
+        Lógica común de descarga vía TRANS:
+
+          - Abre TRANS.
+          - Lee header y lo guarda (.hdr).
+          - Parsear metadatos (Order, Counts, Sample, Start, Amp, Span, UnitOrder).
+          - Descarga datos puros y los guarda (.bin).
+          - Cierra TRANS.
+
+        Devuelve un diccionario con toda la info necesaria para
+        generar GBD, CSV o Excel.
         """
         base = os.path.basename(path_in_gl)
-        name_no_ext = os.path.splitext(base)[0]
+        base_name = os.path.splitext(base)[0]
 
-        out_dir = os.path.join(dest_folder, name_no_ext)
+        out_dir = os.path.join(dest_folder, base_name)
         os.makedirs(out_dir, exist_ok=True)
 
-        hdr_path = os.path.join(out_dir, name_no_ext + ".hdr")
-        bin_path = os.path.join(out_dir, name_no_ext + ".bin")
-        gbd_path = os.path.join(out_dir, name_no_ext + ".GBD")
-        csv_path = os.path.join(out_dir, name_no_ext + ".csv")
+        hdr_path = os.path.join(out_dir, base_name + ".hdr")
+        bin_path = os.path.join(out_dir, base_name + ".bin")
 
         logger.info(f"[GraphtecCapture] Descargando {path_in_gl} → {out_dir}")
 
@@ -141,83 +283,74 @@ class GraphtecCapture:
 
         logger.info("[GraphtecCapture] TRANS abierto correctamente.")
 
-        # 3) Leer header TRANS → .hdr
-        header_text = self._read_header_trans()
-        with open(hdr_path, "w", encoding="utf-8") as f:
-            f.write(header_text)
-        logger.info(f"[GraphtecCapture] Header guardado en {hdr_path}")
+        try:
+            # 3) Leer header TRANS → .hdr
+            header_text = self._read_header_trans()
+            with open(hdr_path, "w", encoding="utf-8") as f:
+                f.write(header_text)
+            logger.info(f"[GraphtecCapture] Header guardado en {hdr_path}")
 
-        # 4) Parsear metadatos del header
-        order = self._extract_order(header_text)
-        counts = self._extract_counts(header_text)
-        sample_delta = self._extract_sample_delta(header_text)
-        start_dt = self._extract_start_datetime(header_text)
-        amp_info = self._extract_amp_info(header_text)
-        spans = self._extract_spans(header_text)
-        module = self._extract_module(header_text)
-        header_siz = self._extract_header_size(header_text)
+            # 4) Parsear metadatos del header
+            order = self._extract_order(header_text)
+            counts = self._extract_counts(header_text)
+            sample_delta = self._extract_sample_delta(header_text)
+            start_dt = self._extract_start_datetime(header_text)
+            amp_info = self._extract_amp_info(header_text)
+            spans = self._extract_spans(header_text)
+            module = self._extract_module(header_text)
+            header_siz = self._extract_header_size(header_text)
 
-        if not order or counts <= 0:
-            logger.error("[GraphtecCapture] Header sin Order o Counts válidos.")
-            # Cerrar TRANS antes de salir
+            if not order or counts <= 0:
+                logger.error("[GraphtecCapture] Header sin Order o Counts válidos.")
+                return None
+
+            bytes_per_sample = len(order) * 2
+            total_bytes_expected = counts * bytes_per_sample
+
+            logger.info(
+                "[GraphtecCapture] order=%s, counts=%d, bytes/row=%d, module=%s",
+                order,
+                counts,
+                bytes_per_sample,
+                module,
+            )
+
+            # 5) Descargar datos puros → .bin (sin cabecera #6, ni status, ni checksum)
+            data_bytes = self._download_data_bytes(counts, bytes_per_sample)
+
+            with open(bin_path, "wb") as fout_bin:
+                fout_bin.write(data_bytes)
+            logger.info(
+                "[GraphtecCapture] BIN guardado en %s (%d bytes, esperado %d bytes)",
+                bin_path,
+                len(data_bytes),
+                total_bytes_expected,
+            )
+
+            return {
+                "folder": out_dir,
+                "base_name": base_name,
+                "hdr_path": hdr_path,
+                "bin_path": bin_path,
+                "header_text": header_text,
+                "data_bytes": data_bytes,
+                "order": order,
+                "counts": counts,
+                "sample_delta": sample_delta,
+                "start_dt": start_dt,
+                "amp_info": amp_info,
+                "spans": spans,
+                "module": module,
+                "header_siz": header_siz,
+            }
+
+        finally:
+            # 6) Cerrar TRANS siempre
             self.conn.send(":TRANS:CLOSE?")
-            self.conn.read_ascii()
-            return None
-
-        bytes_per_sample = len(order) * 2
-        total_bytes_expected = counts * bytes_per_sample
-
-        logger.info(
-            "[GraphtecCapture] order=%s, counts=%d, bytes/row=%d, module=%s",
-            order,
-            counts,
-            bytes_per_sample,
-            module,
-        )
-
-        # 5) Descargar datos puros → .bin (sin cabecera #6, ni status, ni checksum)
-        data_bytes = self._download_data_bytes(counts, bytes_per_sample)
-
-        with open(bin_path, "wb") as fout_bin:
-            fout_bin.write(data_bytes)
-        logger.info(
-            "[GraphtecCapture] BIN guardado en %s (%d bytes, esperado %d bytes)",
-            bin_path,
-            len(data_bytes),
-            total_bytes_expected,
-        )
-
-        # 6) Reconstruir GBD: header + padding + datos
-        gbd_bytes = self._build_gbd_file(header_text, data_bytes, header_siz)
-        with open(gbd_path, "wb") as fgbd:
-            fgbd.write(gbd_bytes)
-        logger.info(f"[GraphtecCapture] GBD reconstruido guardado en {gbd_path}")
-
-        # 7) Generar CSV en unidades físicas
-        self._data_to_csv(
-            data_bytes=data_bytes,
-            csv_path=csv_path,
-            order=order,
-            counts=counts,
-            start_dt=start_dt,
-            delta=sample_delta,
-            amp_info=amp_info,
-            spans=spans,
-            module=module,
-        )
-        logger.info(f"[GraphtecCapture] CSV generado en {csv_path}")
-
-        # 8) Cerrar TRANS
-        self.conn.send(":TRANS:CLOSE?")
-        self.conn.read_ascii()
-
-        return {
-            "folder": out_dir,
-            "hdr": hdr_path,
-            "bin": bin_path,
-            "gbd": gbd_path,
-            "csv": csv_path,
-        }
+            try:
+                self.conn.read_ascii()
+            except Exception:
+                pass
 
     # ============================================================
     # LECTURA DEL HEADER TRANS (#6****** + header ASCII)
@@ -236,14 +369,7 @@ class GraphtecCapture:
         if not isinstance(block, bytes):
             raise RuntimeError("[GraphtecCapture] HEAD devolvió datos no binarios.")
 
-        block = self._strip_noise(block)
-        if not block.startswith(b"#"):
-            raise ValueError("[GraphtecCapture] HEAD inválido (no empieza por '#').")
-
-        nd = int(block[1:2])          # siempre '6'
-        strlen = int(block[2:2 + nd]) # 6 dígitos de longitud
-        text = block[2 + nd:2 + nd + strlen]
-        return text.decode("ascii", errors="ignore")
+        return parse_head_block(block)
 
     # ============================================================
     # PARSERS DE HEADER (GBD File Specification)
@@ -251,16 +377,14 @@ class GraphtecCapture:
     @staticmethod
     def _extract_header_size(hdr: str) -> int:
         """
-        HeaderSiz = 4096
-
-        Tamaño de la región de cabecera en el fichero GBD
-        (múltiplo de 2048).
+        HeaderSiz = tamaño de la región de cabecera en el fichero GBD
+        (múltiplo de 2048). Por defecto, 4096.
         """
         m = re.search(r"HeaderSiz\s*=\s*(\d+)", hdr)
         return int(m.group(1)) if m else 4096
 
     @staticmethod
-    def _extract_order(hdr: str):
+    def _extract_order(hdr: str) -> List[str]:
         """
         Extrae Order del bloque $$Data del header GBD.
         """
@@ -293,7 +417,7 @@ class GraphtecCapture:
     @staticmethod
     def _extract_sample_delta(hdr: str) -> timedelta:
         """
-        Sample = 500ms, 1s, 10m, etc.
+        Sample = 500ms, 1s, 10m, 1h, etc.
         """
         m = re.search(r"Sample\s*=\s*([0-9]+)\s*([a-zA-Z]+)", hdr)
         if not m:
@@ -306,10 +430,12 @@ class GraphtecCapture:
             return timedelta(seconds=val)
         if unit.startswith("m"):
             return timedelta(minutes=val)
+        if unit.startswith("h"):
+            return timedelta(hours=val)
         return timedelta(seconds=1)
 
     @staticmethod
-    def _extract_start_datetime(hdr: str):
+    def _extract_start_datetime(hdr: str) -> Optional[datetime]:
         m = re.search(r"Start\s*=\s*([0-9\-]+)\s*,\s*([0-9:]+)", hdr)
         if not m:
             return None
@@ -321,7 +447,7 @@ class GraphtecCapture:
             return None
 
     @staticmethod
-    def _extract_amp_info(hdr: str):
+    def _extract_amp_info(hdr: str) -> Dict[str, Dict[str, str]]:
         """
         Bloque $Amp:
 
@@ -335,7 +461,7 @@ class GraphtecCapture:
               ...
             }
         """
-        amp = {}
+        amp: Dict[str, Dict[str, str]] = {}
         for ch in ["CH1", "CH2", "CH3", "CH4"]:
             m = re.search(
                 rf"{ch}\s*=\s*([^,\n]+),\s*([^,\n]+),\s*([^,\n]+),.*",
@@ -350,7 +476,7 @@ class GraphtecCapture:
         return amp
 
     @staticmethod
-    def _extract_spans(hdr: str):
+    def _extract_spans(hdr: str) -> Dict[str, Tuple[int, int]]:
         """
         Bloque $$Span:
 
@@ -361,7 +487,7 @@ class GraphtecCapture:
         Devuelve:
             {"CH1": (-10000, 10000), ...}
         """
-        spans = {}
+        spans: Dict[str, Tuple[int, int]] = {}
         for ch in ["CH1", "CH2", "CH3", "CH4"]:
             m = re.search(rf"{ch}\s*=\s*(-?\d+)\s*,\s*\+?(-?\d+)", hdr)
             if m:
@@ -428,7 +554,16 @@ class GraphtecCapture:
                 )
                 break
 
-            data = self._extract_binary_data(block)
+            data, status, checksum_ok = extract_trans_data_block(block)
+
+            if not data:
+                logger.warning(
+                    "[GraphtecCapture] Bloque DATA vacío en rango %d-%d, deteniendo descarga.",
+                    first,
+                    last,
+                )
+                break
+
             buf.extend(data)
 
             first = last + 1
@@ -449,88 +584,6 @@ class GraphtecCapture:
             )
 
         return bytes(buf)
-
-    # ============================================================
-    # EXTRAER DATA PURA DE UN BLOQUE #6******
-    # ============================================================
-    def _extract_binary_data(self, block: bytes) -> bytes:
-        """
-        Bloque DATA (según Data Reception):
-
-          "#6******" + STATUS(2) + DATA(N) + CHECKSUM(2)
-
-        Donde ****** = N (tamaño de DATA). HEAD/MEAS no llevan STATUS/CHECKSUM.
-
-        Esta función devuelve solo DATA (N bytes). Verifica status y checksum
-        si están presentes.
-        """
-        block = self._strip_noise(block)
-
-        if not block.startswith(b"#"):
-            # ascii inesperado
-            try:
-                text = block.decode("ascii", errors="ignore").strip()
-            except Exception:
-                text = "?"
-            logger.warning(f"[GraphtecCapture] bloque ascii recibido: {text}")
-            return b""
-
-        nd = int(block[1:2])          # '6'
-        strlen = int(block[2:2 + nd]) # longitud de DATA en bytes (N)
-        offset = 2 + nd
-        remaining = len(block) - offset
-
-        # HEAD/MEAS: "#6******" + DATA(N)
-        if remaining == strlen:
-            return block[offset:offset + strlen]
-
-        # DATA de TRANS: "#6******" + STATUS(2) + DATA(N) + CHECKSUM(2)
-        if remaining >= strlen + 4:
-            # STATUS
-            status_bytes = block[offset:offset + 2]
-            if len(status_bytes) == 2:
-                status_val = struct.unpack(">H", status_bytes)[0]
-                # Bit 0 = error / bits 1 y 2 para START/END según manual
-                if status_val & 0x0001:
-                    logger.error(
-                        f"[GraphtecCapture] STATUS de TRANS indica error (0x{status_val:04X})."
-                    )
-                if status_val & 0x0002:
-                    logger.error(
-                        f"[GraphtecCapture] Error en posición END (STATUS=0x{status_val:04X})."
-                    )
-                if status_val & 0x0004:
-                    logger.error(
-                        f"[GraphtecCapture] Error en posición START (STATUS=0x{status_val:04X})."
-                    )
-
-            data_start = offset + 2
-            data_end = data_start + strlen
-            data = block[data_start:data_end]
-
-            # CHECKSUM
-            checksum_bytes = block[data_end:data_end + 2]
-            if len(checksum_bytes) == 2:
-                checksum_rx = struct.unpack(">H", checksum_bytes)[0]
-                checksum_calc = sum(data) & 0xFFFF
-                if checksum_calc != checksum_rx:
-                    logger.error(
-                        "[GraphtecCapture] Checksum inválido: "
-                        f"calc=0x{checksum_calc:04X}, recv=0x{checksum_rx:04X}"
-                    )
-
-            return data
-
-        logger.warning("[GraphtecCapture] bloque truncado en _extract_binary_data.")
-        return b""
-
-    @staticmethod
-    def _strip_noise(block: bytes) -> bytes:
-        """
-        Busca el primer '#' y descarta basura anterior.
-        """
-        idx = block.find(b"#")
-        return block[idx:] if idx != -1 else block
 
     # ============================================================
     # RECONSTRUCCIÓN DE GBD
@@ -561,225 +614,27 @@ class GraphtecCapture:
         return padded + data_bytes
 
     # ============================================================
-    # CONVERSIÓN FÍSICA (GS-4VT Y RESTO)
+    # DECODIFICAR DATA → TABLA (timestamps + columnas + filas)
     # ============================================================
-    @staticmethod
-    def _decode_special(raw: int):
-        """
-        Códigos especiales GL100 (idénticos a real-time):
-          -0x7fff : UnderFS
-           0x7ffc : OverFS
-           0x7ffd : Burnout
-           0x7ffe : Off
-           0x7fff : CalcError
-        """
-        if raw == 0x7fff:
-            return None, "CalcError"
-        if raw == 0x7ffe:
-            return None, "Off"
-        if raw == 0x7ffd:
-            return None, "Burnout"
-        if raw == 0x7ffc:
-            return None, "OverFS"
-        if raw == -0x7fff:
-            return None, "UnderFS"
-        return raw, None
-
-    @staticmethod
-    def _convert_4vt_voltage(raw_val: int, rng: str) -> float:
-        """
-        Conversión EXACTA según "2.2 Binary translation of voltage data
-        of 4ch voltage temperature (GS-4VT)".
-
-        1) Escalado base (1, 2, 5) → factores 1 / 2 / 4
-        2) Ajuste de punto decimal → siempre a Voltios
-        """
-        rng_norm = (rng or "").upper().replace(" ", "")
-
-        # Factor base (1 / 2 / 4)
-        base_factor = None
-        # Rangos base '1': 100mV / 1V / 10V
-        if rng_norm in ("100MV", "1V", "10V"):
-            base_factor = 2
-        # Rangos base '2': 20mV / 200mV / 2V / 20V
-        elif rng_norm in ("20MV", "200MV", "2V", "20V"):
-            base_factor = 1
-        # Rangos base '5': 50mV / 500mV / 5V / 50V / 1-5V
-        elif rng_norm in ("50MV", "500MV", "5V", "50V", "1-5V", "1TO5V", "1-5VDC"):
-            base_factor = 4
-
-        if base_factor is None:
-            # Rango desconocido → devolvemos raw sin escalar
-            return float(raw_val)
-
-        # Ajuste de punto decimal (siempre a V)
-        dec_factor = None
-        if rng_norm == "20MV":
-            dec_factor = 1_000_000
-        elif rng_norm in ("50MV", "100MV", "200MV"):
-            dec_factor = 100_000
-        elif rng_norm in ("500MV", "1V", "2V"):
-            dec_factor = 10_000
-        elif rng_norm in ("5V", "10V", "20V", "1-5V", "1TO5V", "1-5VDC"):
-            dec_factor = 1_000
-        elif rng_norm == "50V":
-            dec_factor = 100
-
-        if dec_factor is None:
-            return float(raw_val)
-
-        return raw_val / (base_factor * dec_factor)
-
-    def _convert_value(self, module, inp, rng, span, raw_val):
-        """
-        Conversión física unificada para todos los módulos GL100.
-
-        - GS-4VT: fórmulas oficiales (sin spans)
-        - Resto: conversión lineal por spans + ajustes heurísticos
-        """
-        module = (module or "UNKNOWN").upper()
-        inp = (inp or "").upper()
-        rng = (rng or "").upper()
-
-        # ---------------------- GS-4VT ---------------------------
-        if module.startswith("GS-4VT"):
-            if inp in ("DC", "DC_V", "V", "VT", "MV"):
-                return self._convert_4vt_voltage(raw_val, rng)
-
-            # Temperatura por termopar (2.3 Temperature data):
-            # [Temperature (°C)] = [Temperature data] / 10
-            if inp == "TEMP":
-                return raw_val / 10.0
-
-            # Logic / Pulse / Alarm → devolver raw
-            return float(raw_val)
-
-        # ---------------------- Resto de módulos -----------------
-        smin, smax = span
-
-        # Conversión lineal Graphtec en unidades del span
-        phys = smin + ((raw_val + 32768) * (smax - smin) / 65535.0)
-
-        # GS-TH
-        if module.startswith("GS-TH"):
-            if inp == "TEMP":
-                return phys / 100.0
-            if inp in ("HUM", "HUMID", "RH"):
-                return phys / 100.0
-            if inp == "DEW":
-                return phys / 100.0
-            return phys
-
-        # GS-3AT
-        if module.startswith("GS-3AT"):
-            if inp == "ACC":
-                return phys / 1000.0
-            if inp == "TEMP":
-                return phys / 100.0
-            return phys
-
-        # GS-LXUV
-        if module.startswith("GS-LXUV"):
-            if inp in ("LUX", "UV"):
-                return phys / 1000.0
-            return phys
-
-        # GS-CO2
-        if module.startswith("GS-CO2"):
-            return phys
-
-        # GS-DPA-AC
-        if module.startswith("GS-DPA-AC"):
-            if "A" in inp:
-                return phys / 1000.0
-            return phys
-
-        # GS-4TSR
-        if module.startswith("GS-4TSR"):
-            return phys / 100.0
-
-        return phys
-
-    def _convert_row_physical(self, module, order, raw_row, amp_info, spans):
-        """
-        Convierte una fila de datos crudos (lista de enteros 16-bit)
-        en unidades físicas, respetando el Order del header.
-
-        Aplica también los códigos especiales del GL100.
-        """
-        out = []
-        for name, raw_val in zip(order, raw_row):
-            n = name.strip()
-
-            # Campos no canal (Logic, Alarm, etc.) → dejar raw tal cual
-            if not n.startswith("CH"):
-                out.append(raw_val)
-                continue
-
-            # Tratar códigos especiales
-            val_raw, flag = self._decode_special(raw_val)
-            if val_raw is None:
-                # Error / burnout / overFS / etc. → dejamos celda vacía
-                out.append(None)
-                continue
-
-            span = spans.get(n, (0, 1))
-            info = amp_info.get(n, {})
-            inp = info.get("input") or ""
-            rng = info.get("range") or ""
-
-            val = self._convert_value(
-                module=module,
-                inp=inp,
-                rng=rng,
-                span=span,
-                raw_val=val_raw,
-            )
-            out.append(val)
-
-        return out
-
-    def _build_column_names_with_units(self, order, amp_info):
-        cols = []
-        for n in order:
-            name = n.strip()
-            if not name.startswith("CH"):
-                cols.append(name)
-                continue
-
-            info = amp_info.get(name, {})
-            inp = (info.get("input") or "").upper()
-
-            if inp == "TEMP":
-                cols.append(f"{name}_C")
-            elif inp in ("DC", "DC_V", "V", "VT", "MV"):
-                cols.append(f"{name}_V")
-            elif inp == "ACC":
-                cols.append(f"{name}_G")
-            elif inp in ("HUM", "HUMID", "RH"):
-                cols.append(f"{name}_RH")
-            else:
-                cols.append(name)
-
-        return cols
-
-    # ============================================================
-    # GENERACIÓN DEL CSV
-    # ============================================================
-    def _data_to_csv(
+    def _decode_to_table(
         self,
         data_bytes: bytes,
-        csv_path: str,
-        order,
+        order: List[str],
         counts: int,
-        start_dt,
-        delta,
-        amp_info,
-        spans,
-        module,
-    ):
+        start_dt: Optional[datetime],
+        delta: timedelta,
+        amp_info: Dict[str, Dict[str, str]],
+        spans: Dict[str, Tuple[int, int]],
+        module: str,
+    ) -> Tuple[List[Optional[datetime]], List[str], List[List[Optional[float]]]]:
         """
-        Convierte data_bytes (pure data, 16-bit big-endian) en CSV.
+        Convierte data_bytes (pure data, 16-bit big-endian) en una tabla:
+
+            - lista de timestamps (o None)
+            - lista de nombres de columna
+            - lista de filas físicas
+
+        Esta función es común para CSV y Excel.
         """
         n_items = len(order)
         bytes_per_sample = n_items * 2
@@ -795,29 +650,113 @@ class GraphtecCapture:
                 counts,
             )
 
-        rows_phys = []
+        rows_phys: List[List[Optional[float]]] = []
         for i in range(n_samples):
             base = i * bytes_per_sample
             raw_row = struct.unpack_from(f">{n_items}h", data_bytes, base)
-            phys_row = self._convert_row_physical(
-                module, order, raw_row, amp_info, spans
+            phys_row = convert_row_physical(
+                module=module,
+                order=order,
+                raw_row=raw_row,
+                amp_info=amp_info,
+                spans=spans,
             )
             rows_phys.append(phys_row)
 
         # timestamps
         if start_dt is None:
-            timestamps = ["" for _ in range(n_samples)]
+            timestamps: List[Optional[datetime]] = [None for _ in range(n_samples)]
         else:
             timestamps = [start_dt + i * delta for i in range(n_samples)]
 
-        cols = self._build_column_names_with_units(order, amp_info)
+        cols = build_column_names_with_units(order, amp_info)
 
-        # escribir CSV
+        return timestamps, cols, rows_phys
+
+    # ============================================================
+    # GENERACIÓN DEL CSV
+    # ============================================================
+    def _data_to_csv(
+        self,
+        data_bytes: bytes,
+        csv_path: str,
+        order: List[str],
+        counts: int,
+        start_dt: Optional[datetime],
+        delta: timedelta,
+        amp_info: Dict[str, Dict[str, str]],
+        spans: Dict[str, Tuple[int, int]],
+        module: str,
+    ) -> None:
+        """
+        Genera un CSV a partir de los datos crudos y la metadata.
+        """
+        timestamps, cols, rows_phys = self._decode_to_table(
+            data_bytes=data_bytes,
+            order=order,
+            counts=counts,
+            start_dt=start_dt,
+            delta=delta,
+            amp_info=amp_info,
+            spans=spans,
+            module=module,
+        )
+
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             w.writerow(["TimeStamp"] + cols)
             for ts, row in zip(timestamps, rows_phys):
-                if ts == "":
+                if ts is None:
                     w.writerow([""] + list(row))
                 else:
-                    w.writerow([ts.isoformat()] + list(row))  # type: ignore
+                    w.writerow([ts.isoformat()] + list(row))
+
+    # ============================================================
+    # GENERACIÓN DEL EXCEL
+    # ============================================================
+    def _data_to_excel(
+        self,
+        data_bytes: bytes,
+        xlsx_path: str,
+        order: List[str],
+        counts: int,
+        start_dt: Optional[datetime],
+        delta: timedelta,
+        amp_info: Dict[str, Dict[str, str]],
+        spans: Dict[str, Tuple[int, int]],
+        module: str,
+    ) -> None:
+        """
+        Genera un Excel (.xlsx) a partir de los datos crudos y la metadata.
+        """
+        if Workbook is None:
+            raise RuntimeError(
+                "openpyxl no está instalado. "
+                "Instala 'openpyxl' para poder usar _data_to_excel()."
+            )
+
+        timestamps, cols, rows_phys = self._decode_to_table(
+            data_bytes=data_bytes,
+            order=order,
+            counts=counts,
+            start_dt=start_dt,
+            delta=delta,
+            amp_info=amp_info,
+            spans=spans,
+            module=module,
+        )
+
+        wb = Workbook()
+        ws = wb.active
+        if ws is not None:
+            ws.title = "Data"
+
+            # Cabecera
+            ws.append(["TimeStamp"] + cols)
+
+            # Filas
+            for ts, row in zip(timestamps, rows_phys):
+                ts_str = ts.isoformat() if ts is not None else ""
+                ws.append([ts_str] + list(row))
+
+        wb.save(xlsx_path)

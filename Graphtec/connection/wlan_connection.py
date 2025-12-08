@@ -75,3 +75,19 @@ class WLANConnection(BaseConnection):
         """Envía un comando y recibe la respuesta."""
         self.send(command)
         return self.receive(size=size)
+
+    def flush_buffer(self):
+        """Limpia el buffer de recepción del socket."""
+        if not self._connection:
+            raise ConnectionError("Socket TCP no abierto")
+        
+        self._connection.setblocking(False)
+        try:
+            while True:
+                data = self._connection.recv(4096)
+                if not data:
+                    break
+        except BlockingIOError:
+            pass
+        finally:
+            self._connection.setblocking(True)

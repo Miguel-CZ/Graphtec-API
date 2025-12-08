@@ -51,10 +51,10 @@ class SerialConnection(BaseConnection):
                 timeout=self.timeout,
                 write_timeout=self.write_timeout,
             )
-            logger.info(f"[GL100 USB] Conexión abierta en {self.port}")
+            logger.info(f"[SerialConnection] Conexión abierta en {self.port}")
 
         except serial.SerialException as e:
-            logger.error(f"[GL100 USB] Error al abrir {self.port}: {e}")
+            logger.error(f"[SerialConnection] Error al abrir {self.port}: {e}")
             raise
 
     def close(self):
@@ -64,7 +64,7 @@ class SerialConnection(BaseConnection):
         if self._connection:
             try:
                 self._connection.close()
-                logger.info("[GL100 USB] Conexión cerrada")
+                logger.info("[SerialConnection] Conexión cerrada")
             finally:
                 self._connection = None
 
@@ -88,11 +88,11 @@ class SerialConnection(BaseConnection):
             command += b"\r\n"
 
         if not self._connection:
-            raise ConnectionError("Puerto USB no abierto")
+            raise ConnectionError("[SerialConnection] Puerto Serial no abierto")
 
         self._connection.write(command)
         self._connection.flush()  # Asegurar que los datos se envíen enteros.
-        logger.debug(f"[USBConnection] << {command}")
+        logger.debug(f"[SerialConnection] << {command}")
         time.sleep(0.1)  # Pequeña pausa para no saturar el buffer
 
     # =========================================================
@@ -108,10 +108,10 @@ class SerialConnection(BaseConnection):
             bytes: Datos recibidos.
         """
         if not self._connection:
-            raise ConnectionError("Puerto USB no abierto")
+            raise ConnectionError("[SerialConnection] Puerto Serial no abierto")
 
         response = self._connection.read(size)
-        logger.debug(f"[USBConnection] >> {response}")
+        logger.debug(f"[SerialConnection] >> {response}")
 
         return response
 
@@ -126,10 +126,10 @@ class SerialConnection(BaseConnection):
             bytes: Datos recibidos incluyendo el terminador.
         """
         if not self._connection:
-            raise ConnectionError("Puerto USB no abierto")
+            raise ConnectionError("[SerialConnection] Puerto Serial no abierto")
 
         response = self._connection.read_until(terminator)  # Lee hasta el terminador.
-        logger.debug(f"[USBConnection] >> {response}")
+        logger.debug(f"[SerialConnection] >> {response}")
         return response
 
     def receive_line(self) -> bytes:
@@ -137,7 +137,7 @@ class SerialConnection(BaseConnection):
         Lee una línea completa. Pyserial usa '\n' como terminador de línea.
         """
         if not self._connection:
-            raise ConnectionError("Puerto USB no abierto")
+            raise ConnectionError("[SerialConnection] Puerto USB no abierto")
 
         line = self._connection.readline()  # Lee hasta el terminador de línea.
         return line
@@ -163,7 +163,7 @@ class SerialConnection(BaseConnection):
         if cmd_up.startswith(":TRANS:OPEN?"):
             if self._connection is not None:
                 resp = self._connection.read(3)
-                logger.debug(f"[USBConnection] >> {resp}")
+                logger.debug(f"[SerialConnection] >> {resp}")
                 return resp
             else:
                 return b""
@@ -186,21 +186,21 @@ class SerialConnection(BaseConnection):
             ndigits_b, length_str_b, data_len(int)
         """
         if not self._connection:
-            raise RuntimeError("Serial no inicializado")
+            raise RuntimeError("[SerialConnection] Serial no inicializado")
 
         # 1) Leer hasta encontrar '#'
         while True:
             b = self._connection.read(1)
             if not b:
-                raise TimeoutError("Timeout esperando inicio de bloque (#)")
+                raise TimeoutError("[SerialConnection] Timeout esperando inicio de bloque (#)")
             if b == b"#":
                 break  # encontrado inicio real
 
         # 2) Leer dígito que indica nº de dígitos del length
         ndigits_b = self._connection.read(1)
         if not ndigits_b or not ndigits_b.isdigit():
-            logger.error(f"[USBConnection] Cabecera binaria inválida: {ndigits_b!r}")
-            raise ValueError("Cabecera binaria inválida (#6).")
+            logger.error(f"[SerialConnection] Cabecera binaria inválida: {ndigits_b!r}")
+            raise ValueError("[SerialConnection] Cabecera binaria inválida (#6).")
 
         nd = int(ndigits_b.decode())
 
@@ -209,7 +209,7 @@ class SerialConnection(BaseConnection):
         try:
             data_len = int(length_str.decode())
         except Exception:
-            logger.error(f"[USBConnection] Longitud inválida en #6******: {length_str!r}")
+            logger.error(f"[SerialConnection] Longitud inválida en #6******: {length_str!r}")
             raise ValueError("Error longitud bloque (#6******).")
 
         return ndigits_b, length_str, data_len
@@ -229,7 +229,7 @@ class SerialConnection(BaseConnection):
         # 4) Leer payload binario (exactamente data_len bytes)
         payload = self._connection.read(data_len)
 
-        logger.debug(f"[USBConnection] << BIN {data_len} bytes")
+        logger.debug(f"[SerialConnection] << BIN {data_len} bytes")
         return b"#" + ndigits_b + length_str + payload
 
     def read_binary_trans_data(self):
@@ -243,7 +243,7 @@ class SerialConnection(BaseConnection):
           b'#' + '6' + '******' + STATUS + DATA + CHECKSUM
         """
         if not self._connection:
-            raise RuntimeError("Serial no inicializado")
+            raise RuntimeError("[SerialConnection] Serial no inicializado")
 
         ndigits_b, length_str, data_len = self._read_hash6_header()
 
@@ -253,11 +253,9 @@ class SerialConnection(BaseConnection):
 
         if len(payload) < to_read:
             logger.warning(
-                "[USBConnection] Bloque TRANS DATA truncado: "
+                "[SerialConnection] Bloque TRANS DATA truncado: "
                 f"esperados {to_read} bytes, recibidos {len(payload)}."
             )
-
-        logger.debug(f"[USBConnection] << BIN {data_len} bytes (DATA)")
 
         return b"#" + ndigits_b + length_str + payload
 
@@ -295,7 +293,7 @@ class SerialConnection(BaseConnection):
         Limpia los buffers de entrada y salida.
         """
         if not self._connection:
-            raise RuntimeError("Serial no inicializado")
+            raise RuntimeError("[SerialConnection] Serial no inicializado")
 
         self._connection.reset_input_buffer()
         self._connection.reset_output_buffer()

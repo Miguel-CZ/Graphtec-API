@@ -47,3 +47,8 @@ class TriggerModule(BaseModule):
         response = self.connection.query(GET_TRIG_PRETRIGGER)
         response = response.decode().strip()
         return response
+    
+    def get_trigger_comb(self):
+        response = self.connection.query(GET_TRIG_COMBINATION)
+        response = response.decode().strip()
+        return response

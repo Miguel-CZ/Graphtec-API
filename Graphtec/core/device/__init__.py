@@ -10,6 +10,7 @@ from graphtec.core.device.file import FileModule
 from graphtec.core.device.trigger import TriggerModule
 from graphtec.core.device.alarm import AlarmModule
 from graphtec.core.device.logic import LogicModule
+from graphtec.core.device.option import OptionModule
 from graphtec.config.config_manager import ConfigManager
 import logging
 logger = logging.getLogger(__name__)
@@ -31,6 +32,8 @@ class GraphtecDevice:
         self.trigger = TriggerModule(self)
         self.alarm = AlarmModule(self)
         self.logic = LogicModule(self)
+        self.option = OptionModule(self)
+
 
         logger.debug(f"[GL100Device] Inicializado")
 

@@ -15,7 +15,7 @@ def GraphtecConnection(conn_type="usb", **kwargs):
     """
     conn_type = conn_type.lower().strip()
 
-    usb_aliases = ["usb", "serial", "com", "uart"]
+    usb_aliases = ["usb", "serial", "com", "uart","serie"]
     lan_aliases = ["wlan","lan", "ethernet", "net", "tcp", "ip", "wifi"]
 
     if conn_type in usb_aliases:

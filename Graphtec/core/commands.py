@@ -18,24 +18,25 @@ RESET_FABRIC = ":OPT:INIT {mode}" #ALL o PART #* Implementado
 SET_NAME = ":OPT:NAME {name}" # Asigna un nombre identificativo #* Implementado
 SET_DATETIME = ":OPT:DATE {datetime}" #Formato YYYY/MM/DD,hh:mm:ss #* Implementado
 SET_SCREEN_ECO = ":OPT:SCREENS {mode}" #ON/OFF #* Implementado
-SET_SCREEN_BRIGHT = ":OPT:SCREENS:BRIGHT {level}" #0-10 #* Implementado
 
 SET_TEMP_UNIT = ":OPT:TUNIT {unit}" #C o F #* Implementado
 SET_BURNOUT = ":OPT:BURN {mode}" # ON/OFF #* Implementado
-SET_ACC_UNIT = ":OPT:ACCUNIT {unit}" #G m/s2 
+
 
 GET_NAME = ":OPT:NAME?" #* Implementado
 GET_DATETIME = ":OPT:DATE?" #* Implementado
+GET_SCREEN_ECO = ":OPT:SCREENS?" #* Implementado
+
 GET_TEMP_UNIT = ":OPT:TUNIT?" #* Implementado
 GET_BURNOUT = ":OPT:BURN?"  #* Implementado
+
+# Unidad de aceleración 
+SET_ACC_UNIT = ":OPT:ACCUNIT {unit}" # G/MPSS
 GET_ACC_UNIT = ":OPT:ACCUNIT?"
 
-SET_OPT_LANGUAGE = ":OPT:LANG {lang}"  # ENG, JPN #* Implementado
-GET_OPT_LANGUAGE = ":OPT:LANG?" #* Implementado
-
-#Calibración de T interna del GS-3AT
-SET_OPT_TEMP_CAL = ":OPT:TEMP {value}"
-GET_OPT_TEMP_CAL = ":OPT:TEMP?"
+#Room Temperature correction (4VT)
+SET_ROOM_TEMP = ":OPT:TEMP {mode}" #ON/OFF
+GET_ROOM_TEMP = ":OPT:TEMP?"
 
 
 # =========================================================
@@ -200,6 +201,7 @@ SET_TRIG_PRETRIGGER = ":TRIG:COND:PRET {value}" # 0-100 % #*Implementado
 
 GET_TRIG_STATUS = ":TRIG:FUNC?" #*Implementado
 GET_TRIG_SOURCE = ":TRIG:COND:SOUR?" #*Implementado
+GET_TRIG_COMBINATION = ":TRIG:COND:COMB?" #*Implementado
 GET_TRIG_CHANNEL = ":TRIG:COND:CH{ch}:SET?" #*Implementado
 GET_TRIG_PRETRIGGER = ":TRIG:COND:PRET?" #*Implementado
 
@@ -219,10 +221,10 @@ GET_ALARM = ":ALAR:EXEC?" #*Implementado
 # =========================================================
 # Grupo LOGIPUL
 # =========================================================
-SET_ALL_LOGIC = ":LOGIPUL:FUNC {mode}" #LOGIc/PULse/OFF
+SET_LOGIC_TYPE = ":LOGIPUL:FUNC {mode}" #LOGIc/PULse/OFF
 SET_LOGIC = ":LOGIPUL:CH{ch}:FUNC {mode}"#Tipo de conteo ON/INST/COUNT/OFF
 
-GET_ALL_LOGIC = ":LOGIPUL:FUNC?" #LOGIC/PULSE/OFF
+GET_LOGIC_TYPE = ":LOGIPUL:FUNC?" #LOGIC/PULSE/OFF
 GET_LOGIC = ":LOGIPUL:CH{ch}:FUNC?" 
 
 

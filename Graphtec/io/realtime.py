@@ -1,5 +1,12 @@
 import struct
 import logging
+from typing import Dict, Any
+
+from graphtec.io.decoder import (
+    extract_meas_payload,
+    decode_special,
+    convert_4vt_voltage,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -10,6 +17,11 @@ class GraphtecRealtime:
     """
 
     def __init__(self, device):
+        """
+        device debe proporcionar al menos:
+          - device.measure.read_one_measurement() -> bytes
+          - device.amp.get_channels() -> dict[int, {"type","input","range"}]
+        """
         self.device = device
 
     # ---------------------------------------------------------
@@ -26,89 +38,47 @@ class GraphtecRealtime:
     # Limpieza de cabecera #6xxxxxx
     # ---------------------------------------------------------
     def _strip_prefix(self, data: bytes) -> bytes:
+        """
+        Usa la utilidad común extract_meas_payload para quitar
+        la cabecera #6****** de :MEAS:OUTP:ONE?.
+        """
         if isinstance(data, str):
-            data = data.encode("latin-1")
-        data = bytes(data)
-
-        if not data.startswith(b"#6"):
-            return data
-
-        length_field = data[2:8]
-        try:
-            data_len = int(length_field.decode())
-        except ValueError:
-            logger.error("[GL100Realtime] Cabecera inválida.")
-            return data
-
-        return data[8:8 + data_len]
+            data = data.encode("latin-1", errors="ignore")
+        return extract_meas_payload(data)
 
     # ---------------------------------------------------------
-    # Valores especiales GL100
-    # ---------------------------------------------------------
-    @staticmethod
-    def _decode_special(raw: int):
-        if raw == 0x7fff:
-            return None, "CalcError"
-        if raw == 0x7ffe:
-            return None, "Off"
-        if raw == 0x7ffd:
-            return None, "Burnout"
-        if raw == 0x7ffc:
-            return None, "OverFS"
-        if raw == -0x7fff:
-            return None, "UnderFS"
-        return raw, None
-
-    # ---------------------------------------------------------
-    # Conversión oficial de voltaje GS-4VT
+    # Conversión oficial de voltaje GS-4VT (reutiliza decoder)
     # ---------------------------------------------------------
     def _convert_voltage(self, raw: int, rng: str) -> float:
         """
         Convierte el valor crudo de un canal DC_V según la tabla oficial.
+        Reutiliza la implementación común de decoder.
         """
-        rng = rng.upper()
-
-        # Determina divisor base (1, 2 o 4) según categoría del rango
-        if rng in ("100MV", "1V", "10V"):
-            divisor = 2
-        elif rng in ("20MV", "200MV", "2V", "20V"):
-            divisor = 1
-        elif rng in ("50MV", "500MV", "5V", "50V", "1_5V"):
-            divisor = 4
-        else:
-            raise ValueError(f"Rango no soportado en GS-4VT: {rng}")
-
-        # Escala decimal para obtener voltios
-        if rng == "20MV":
-            scale = 1e6
-        elif rng in ("50MV", "100MV", "200MV"):
-            scale = 1e5
-        elif rng in ("500MV", "1V", "2V"):
-            scale = 1e4
-        elif rng in ("5V", "10V", "20V", "1_5V"):
-            scale = 1e3
-        elif rng == "50V":
-            scale = 1e2
-        else:
-            scale = 1.0
-
-        return raw / divisor / scale
+        return convert_4vt_voltage(raw, rng)
 
     # ---------------------------------------------------------
     # API pública
     # ---------------------------------------------------------
-    def read(self) -> dict:
+    def read(self) -> Dict[str, Any]:
         """
         Lee una muestra real-time :MEAS:OUTP:ONE? y devuelve
         un diccionario con los valores físicos interpretados.
+
+        Soporta todos los módulos GL100:
+          - GS-4VT: voltaje y termopar
+          - GS-4TSR: termistor
+          - GS-TH: temperatura, humedad, punto de rocío, acumulados
+          - GS-3AT: aceleración + temperatura
+          - GS-LXUV: lux, UV y acumulados
+          - GS-CO2: CO2 + alarmas
         """
         raw = self.read_raw()
         payload = self._strip_prefix(raw)
         if not payload:
             return {}
 
-        channels = self.device.amp.get_channels()
-        parsed = {}
+        channels: Dict[int, Dict[str, Any]] = self.device.amp.get_channels()
+        parsed: Dict[str, Any] = {}
 
         offset = 0
 
@@ -142,7 +112,7 @@ class GraphtecRealtime:
                     break
                 raw_val = struct.unpack_from(">h", payload, offset)[0]
                 offset += 2
-                val, flag = self._decode_special(raw_val)
+                val, flag = decode_special(raw_val)
 
                 # Voltaje DC_V
                 if entrada == "DC_V":
@@ -178,7 +148,7 @@ class GraphtecRealtime:
                     break
                 raw_val = struct.unpack_from(">h", payload, offset)[0]
                 offset += 2
-                val, flag = self._decode_special(raw_val)
+                val, flag = decode_special(raw_val)
                 key = f"CH{ch}_Temp_TSR"
                 parsed[key] = None if val is None else val / 10.0
                 if flag:
@@ -201,7 +171,7 @@ class GraphtecRealtime:
                     break
 
                 # Data1 dummy
-                _dummy = struct.unpack_from(">h", payload, offset)[0]
+                _ = struct.unpack_from(">h", payload, offset)[0]
                 offset += 2
 
                 # Data2–6
@@ -238,7 +208,7 @@ class GraphtecRealtime:
                     break
 
                 # Data1 dummy
-                _dummy = struct.unpack_from(">h", payload, offset)[0]
+                _ = struct.unpack_from(">h", payload, offset)[0]
                 offset += 2
 
                 # Data2–5
@@ -284,7 +254,7 @@ class GraphtecRealtime:
                     break
 
                 # Data1 dummy
-                _dummy = struct.unpack_from(">h", payload, offset)[0]
+                _ = struct.unpack_from(">h", payload, offset)[0]
                 offset += 2
 
                 # Data2–7
@@ -324,7 +294,7 @@ class GraphtecRealtime:
                     break
 
                 # Data1 dummy
-                _dummy = struct.unpack_from(">h", payload, offset)[0]
+                _ = struct.unpack_from(">h", payload, offset)[0]
                 offset += 2
 
                 # Data2 CO2
@@ -349,10 +319,9 @@ class GraphtecRealtime:
                 break
             raw_val = struct.unpack_from(">h", payload, offset)[0]
             offset += 2
-            val, flag = self._decode_special(raw_val)
+            val, flag = decode_special(raw_val)
             parsed[f"CH{ch}_raw"] = val
             if flag:
                 parsed[f"CH{ch}_Flag"] = flag
 
         return parsed
-
