@@ -5,9 +5,9 @@ Alias de comandos IF del GL100.
 # =========================================================
 # Grupo COMMON
 # ========================================================= 
-GET_IDN = "*IDN?" #* Implementado
-SAVE_SETTINGS = "*SAV" #* Implementado
-CLEAR = "*CLS" #* Implementado
+GET_IDN = "*IDN?"
+SAVE_SETTINGS = "*SAV"
+CLEAR = "*CLS"
 
 
 # =========================================================
@@ -55,28 +55,11 @@ GET_ERROR_STATUS = ":STAT:ERR?" #0: Sin error, 100: Error SD, 200: Error COMM, 3
 # =========================================================
 # Grupo IF (Interfaz)
 # =========================================================
-GET_CONN_VERSION = ":IF:VER?" #* Implementado
-RESET_CONN = ":IF:RESET" #* Implementado
+#El resto de comandos son para conexiones wlan, no hay módulo Wifi en los aparatos del lab.
+SET_CONN_NLCODE =":IF:NLCODE {code}" 
+# code: En principio CR_LF(Windows). Pero si no elegir entre CR(IOS) o LF (Unix) 
+GET_CONN_NLCODE = ":IF:NLCODE?"
 
-SET_CONN_NLCODE =":IF:NLCODE {code}" # code: En principio CR_LF. Pero si no elegir entre CR o LF #* Implementado
-SET_CONN_BAUDRATE = ":IF:BAUD {baud}" #* Implementado
-SET_CONN_PARITY = ":IF:PARITY {parity}" #None / EVEN / ODD #* Implementado
-SET_CONN_DATABITS = ":IF:DATABITS {n}" #* Implementado
-SET_CONN_STOPBITS = ":IF:STOPBITS {n}" #* Implementado
-SET_CONN_FLOW = ":IF:FLOW {flow}" # NONE, RTSCTS, XONXOFF #* Implementado
-SET_CONN_TIMEOUT = ":IF:TIMEOUT {timeout}" #* Implementado
-
-GET_CONN_INFO = ":IF:INFO?" #* Implementado
-GET_CONN_TYPE = ":IF:TYPE?" #* Implementado
-GET_CONN_STATUS = ":IF:STAT?" #* Implementado
-
-GET_CONN_NLCODE = ":IF:NLCODE?" #* Implementado
-GET_CONN_BAUDRATE = ":IF:BAUD?" #* Implementado
-GET_CONN_PARITY = ":IF:PARITY?" #* Implementado
-GET_CONN_DATABITS = ":IF:DATABITS?" #* Implementado
-GET_CONN_STOPBITS = ":IF:STOPBITS?" #* Implementado
-GET_CONN_FLOW = ":IF:FLOW?" #* Implementado
-GET_CONN_TIMEOUT = ":IF:TIMEOUT?" #* Implementado
 
 
 # =========================================================
@@ -113,41 +96,45 @@ GET_CHANNL_PF = ":AMP:CH{ch}:PF?"
 # =========================================================
 # Grupo DATA
 # =========================================================
-SET_DATA_LOCATION = ":DATA:MEAS {location}" # MEM para memoria, DIR para directa (streaming) #*Implementado
-SET_DATA_MEMORY_SIZE = ":DATA:MEM {size}" # Auto / Sino tamaño de captura #*Implementado
-SET_DATA_DESTINATION = ":DATA:DEST {dest}" # MEM para memoria / SD para tarjetaSD #*Implementado
+SET_DATA_LOCATION = ":DATA:MEASUREM {location}" # MEM para memoria, DIRE para directa
+SET_DATA_MEMORY_SIZE = ":DATA:MEMORYS {size}" # 16/32/64/128 
+SET_DATA_DESTINATION = ":DATA:DEST {dest}" # MEM para memoria / SD para tarjetaSD 
 
-SET_DATA_SAMPLING = ":DATA:SAMP {interval}" #10MS, 20MS, 50MS, 100MS, 200MS, 500MS, 1S, 2S, 5S, 10S, 30S, 1M, 2M, 5M, 10M, 30M, 1H #*Implementado
+SET_DATA_SAMPLING = ":DATA:SAMP {sample}" 
+# MemoryMode
+# On: 5/10/20/50 (MS)
+# Direct: 500 (MS)/ 1/2/5/10/20/30/60/120/300/600/1200/1800/3600 (S)
 
-SET_DATA_SUB = ":DATA:SUBS:OFFON {status}" #ON/OFF #*Implementado
-SET_DATA_SUB_MODE = ":DATA:SUBS:PEAKAVERMS {type}" #PEAK: Valores Pico, #AVE: Promedio, #RMS Cuadrático medio #*Implementado
+SET_DATA_SUB = ":DATA:SUBS {mode},{sub_type}" #MODE: ON/OFF TYPE: PEAK // AVE // RMS 
+SET_DATA_CAPTURE_MODE = ":DATA:CAPTM {mode}" # CONT // 1H // 24H
 
-SET_DATA_CAPTURE_MODE = ":DATA:CAPTM {mode}" # Manual (MEAS:START) / TRIG (Cuando hay evento de trigger) #*Implementado
+GET_DATA_LOCATION = ":DATA:MEASUREM?" 
+GET_DATA_MEMORY_SIZE = ":DATA:MEMORYS?"
+GET_DATA_DESTINATION = ":DATA:DEST?"
 
-GET_DATA_SAMPLING = ":DATA:SAMP?" #*Implementado
-GET_DATA_MEMORY_SIZE = ":DATA:MEM?" #*Implementado
-GET_DATA_DESTINATION = ":DATA:DEST?" #*Implementado
-GET_DATA_POINTS = ":DATA:POINT?" #*Implementado
-GET_DATA_CAPTURE_MODE = ":DATA:CAPTM?" #*Implementado
-GET_DATA_CAPTURE_STATE = ":DATA:CAPT?" #*Implementado
-GET_DATA_SUB_MODE = ":DATA:SUBS:PEAKAVERMS?" #*Implementado
+GET_DATA_FILEPATH = ":DATA:CAPT?"
+GET_DATA_POINTS = ":DATA:POINT?"
 
+GET_DATA_SAMPLING  =":DATA:SAMP?"
+
+GET_DATA_SUB = ":DATA:SUBS?"
+GET_DATA_CAPTURE_MODE = ":DATA:CAPTM?"
 
 # =========================================================
 # Grupo MEASURE
 # =========================================================
-START_MEASUREMENT = ":MEAS:START" #*Implementado
-STOP_MEASUREMENT = ":MEAS:STOP" #*Implementado
+START_MEASUREMENT = ":MEAS:START"
+STOP_MEASUREMENT = ":MEAS:STOP"
 READ_ONCE = ":MEAS:OUTP:ONE?" #*Implementado
-READ_CONT = ":MEAS:OUTP:DATA?" #*Implementado
+#READ_CONT = ":MEAS:OUTP:DATA?" #? Existe?
 
 SET_MEAS_FORMAT = ":MEAS:OUTP:MODE {mode}" #Text o Binary #*Implementado
 #! En texto devolvería valores CSV, sino sería tramas binarias
 
 GET_LAST_DATETIME = ":MEAS:TIME?"  #*Implementado
-GET_CAPTURE_POINTS  = ":MEAS:CAPT?"  #*Implementado
-GET_HEADERS = ":MEAS:OUTP:HEAD?"  #*Implementado
-GET_DATA_FORMAT = ":MEAS:OUTP:MODE?"  #*Implementado
+GET_CAPTURE_POINTS  = ":MEAS:CAPT?"  
+#GET_DATA_FORMAT = ":MEAS:OUTP:MODE?"  #? Existe?
+GET_MEASUREMENT_TIME = ":MEAS:TIME?" # Devuelve started,ended and trigger time
 
 
 # =========================================================
@@ -168,6 +155,7 @@ TRANS_CLOSE = ":TRANS:CLOSE?" #*Implementado
 # =========================================================
 # Grupo FILE
 # =========================================================
+FILE_SAVE = ":FILE:SAVE {filename}" #Formato filename: "¥SD¥FOLDER¥SAVE.CND" 
 FILE_LS = ":FILE:LIST?" #*Implementado
 FILE_LS_FILTER = ":FILE:LIST:FILT {pattern}" #Filtrar por txt, GBD, etc #*Implementado
 FILE_LS_NUM = ":FILE:NUM?" #*Implementado
@@ -189,34 +177,36 @@ LOAD_FILE_SETTINGS = ":FILE:LOAD {filename}" #*Implementado
 # =========================================================
 # Grupo TRIGGER
 # =========================================================
-SET_TRIG_STATUS = ":TRIG:FUNC {status}" #START, STOP, OFF #*Implementado
+SET_TRIG_STATUS = ":TRIG:FUNC {status}" #START, STOP, OFF
 
-SET_TRIG_SOURCE = ":TRIG:COND:SOUR {source}" # OFF, AMP, ALAR, DATE,datetime #*Implementado
-SET_TRIG_SOURCE_DATE = ":TRIG:COND:SOUR DATE,{datetime}" #*Implementado
+SET_TRIG_SOURCE = ":TRIG:COND:SOUR {source}" # OFF, AMP, ALAR, DATE,datetime formato "YYYY-MM-DD hh:mm:ss"
+SET_TRIG_SOURCE_DATE = ":TRIG:COND:SOUR DATE,{datetime}" 
 
-SET_TRIG_COMBINATION = ":TRIG:COND:COMB {comb}" # AND, OR #*Implementado
-SET_TRIG_CHANNEL = ":TRIG:COND:CH{ch}:SET {mode},{value}" #OFF, HIGH, LOW , Nivel de detección #*Implementado
+SET_TRIG_COMBINATION = ":TRIG:COND:COMB {comb}" # AND, OR 
+SET_TRIG_CHANNEL = ":TRIG:COND:CH{ch}:SET {mode},{value}" #OFF, HIGH, LOW , Nivel de detección 
 
-SET_TRIG_PRETRIGGER = ":TRIG:COND:PRET {value}" # 0-100 % #*Implementado
+SET_TRIG_PRETRIGGER = ":TRIG:COND:PRET {value}" # 0-100 % 
 
-GET_TRIG_STATUS = ":TRIG:FUNC?" #*Implementado
-GET_TRIG_SOURCE = ":TRIG:COND:SOUR?" #*Implementado
-GET_TRIG_COMBINATION = ":TRIG:COND:COMB?" #*Implementado
-GET_TRIG_CHANNEL = ":TRIG:COND:CH{ch}:SET?" #*Implementado
-GET_TRIG_PRETRIGGER = ":TRIG:COND:PRET?" #*Implementado
+GET_TRIG_STATUS = ":TRIG:FUNC?" 
+GET_TRIG_SOURCE = ":TRIG:COND:SOUR?" 
+GET_TRIG_COMBINATION = ":TRIG:COND:COMB?" 
+GET_TRIG_CHANNEL = ":TRIG:COND:CH{ch}:SET?" 
+GET_TRIG_PRETRIGGER = ":TRIG:COND:PRET?" 
 
 
 # =========================================================
 # Grupo ALARM
 # =========================================================
-SET_ALARM_MODE = ":ALAR:FUNC {mode}" #ON/OFF #*Implementado
-SET_ALARM_LEVEL = ":ALAR:CH{ch}:SET {mode},{level}" #High, Low, Off #*Implementado
-SET_ALARM = ":ALAR:EXEC {mode}" #ON/OFF #*Implementado
+SET_ALARM_MODE = ":ALAR:FUNC {mode}" #LEVEL/OFF 
+SET_ALARM_LEVEL = ":ALAR:CH{ch}:SET {mode},{level}" #High, Low, Off 
+SET_ALARM_OUTPUT = ":ALAR:OUTP {mode}" #ON/OFF
+SET_ALARM = ":ALAR:EXEC {mode}" #ON/OFF 
 
 GET_ALARM_STATUS = ":ALAR:CH{ch}?"
-GET_ALARM_MODE = ":ALAR:FUNC?" #*Implementado
-GET_ALARM_LEVEL = ":ALAR:CH{ch}:SET?" #*Implementado
-GET_ALARM = ":ALAR:EXEC?" #*Implementado
+GET_ALARM_MODE = ":ALAR:FUNC?" 
+GET_ALARM_LEVEL = ":ALAR:CH{ch}:SET?" 
+GET_ALARM = ":ALAR:EXEC?" 
+GET_ALARM_OUTPUT = ":ALAR:OUTP?"
 
 # =========================================================
 # Grupo LOGIPUL

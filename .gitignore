@@ -1,6 +1,7 @@
 # 
 data/
 codewriter.exe
+codewriter.py
 todo_el_codigo.txt
 .vscode/
 # Byte-compiled / optimized / DLL files
