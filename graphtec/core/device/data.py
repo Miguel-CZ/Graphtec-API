@@ -54,7 +54,7 @@ class DataModule(BaseModule):
         logger.debug(f"[GL-DATA] Destino de datos cambiado a {dest}")
 
     def set_data_sampling(self, sample):
-        # sample: depende de Memory/Direct (no valido estrictamente aquí)
+        # sample: 
         self.connection.send(SET_DATA_SAMPLING.format(sample=sample))
         logger.debug(f"[GL-DATA] Data Sample cambiado a {sample}")
 
@@ -96,7 +96,7 @@ class DataModule(BaseModule):
     def get_data_sampling(self):
         return self._to_str(self.connection.query(GET_DATA_SAMPLING))
 
-    def get_data_memory_size(self):
+    def get_data_mem_size(self):
         return self._to_str(self.connection.query(GET_DATA_MEMORY_SIZE))
 
     def get_data_destination(self):

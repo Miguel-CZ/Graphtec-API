@@ -40,9 +40,9 @@ class LogicModule(BaseModule):
     # SETTERS
     # -------------------------
     def set_logic_type(self, mode: str):
-        # mode: LOGIC / PULSE / OFF
+        # mode: LOGI / PULSE / OFF
         mode = mode.upper()
-        mode_options = {"LOGIC", "PULSE", "OFF"}
+        mode_options = {"LOGI", "PUL", "OFF"}
         if mode not in mode_options:
             raise CommandError(f"mode inválido: {mode} (válidos: {sorted(mode_options)})")
 

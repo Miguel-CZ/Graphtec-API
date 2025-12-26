@@ -50,7 +50,7 @@ class TriggerModule(BaseModule):
             self.connection.send(SET_TRIG_SOURCE.format(source=source))
         else:
             if not dt_str:
-                raise CommandError('dt_str requerido cuando source="DATE" (formato: "YYYY-MM-DD hh:mm:ss")')
+                raise CommandError('Fecha y hora requerido cuando source="DATE" (formato: "YYYY-MM-DD hh:mm:ss")')
             self.connection.send(SET_TRIG_SOURCE_DATE.format(datetime=dt_str))
 
         logger.debug(f"[GL-TRIG] TRIG SOURCE -> {source}")
@@ -64,11 +64,7 @@ class TriggerModule(BaseModule):
         self.connection.send(SET_TRIG_COMBINATION.format(comb=comb))
         logger.debug(f"[GL-TRIG] TRIG COMB -> {comb}")
 
-    def set_trigger_channel(self, ch, mode: str, value="+0.000V"):
-        """
-        El equipo responde con formato 'OFF,+0.000V' incluso cuando OFF,
-        así que mandamos siempre MODE,VALUE.
-        """
+    def set_trigger_channel(self, ch, mode: str, value=""):
         ch = self._validate_channel(ch)
 
         mode = mode.upper()
@@ -99,14 +95,12 @@ class TriggerModule(BaseModule):
     # GETTERS
     # -------------------------
     def get_trigger(self):
-        # RESP: ":TRIG:FUNC OFF" -> "OFF"
         text = self._to_str(self.connection.query(GET_TRIG_STATUS))
         if not text:
             raise ResponseError("Sin respuesta a :TRIG:FUNC?")
         return get_last_token(text)
 
     def get_trigger_source(self):
-        # RESP: ":TRIG:COND:SOUR OFF" -> "OFF"
         text = self._to_str(self.connection.query(GET_TRIG_SOURCE))
         if not text:
             raise ResponseError("Sin respuesta a :TRIG:COND:SOUR?")

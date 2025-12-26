@@ -13,22 +13,23 @@ CLEAR = "*CLS"
 # =========================================================
 # Grupo OPT (Opciones)
 # =========================================================
-RESET_FABRIC = ":OPT:INIT {mode}" #ALL o PART #* Implementado
+SET_NAME = ":OPT:NAME {name}" # Asigna un nombre identificativo: "Nombre"
+GET_NAME = ":OPT:NAME?"
 
-SET_NAME = ":OPT:NAME {name}" # Asigna un nombre identificativo #* Implementado
-SET_DATETIME = ":OPT:DATE {datetime}" #Formato YYYY/MM/DD,hh:mm:ss #* Implementado
-SET_SCREEN_ECO = ":OPT:SCREENS {mode}" #ON/OFF #* Implementado
+SET_DATETIME = ":OPT:DATE {datetime}" #Formato YYYY/MM/DD,hh:mm:ss
+GET_DATETIME = ":OPT:DATE?"
 
-SET_TEMP_UNIT = ":OPT:TUNIT {unit}" #C o F #* Implementado
-SET_BURNOUT = ":OPT:BURN {mode}" # ON/OFF #* Implementado
+#Apagar pantalla por tiempo
+SET_SCREEN_SAVE = ":OPT:SCREENS {time}" #time: OFF/1/2/5/10/20/30/60 (MIN)
+GET_SCREEN_SAVE = ":OPT:SCREENS?"
 
+#Unidades para temperatura
+SET_TEMP_UNIT = ":OPT:TUNIT {unit}" # CELS/FAHR
+GET_TEMP_UNIT = ":OPT:TUNIT?"
 
-GET_NAME = ":OPT:NAME?" #* Implementado
-GET_DATETIME = ":OPT:DATE?" #* Implementado
-GET_SCREEN_ECO = ":OPT:SCREENS?" #* Implementado
-
-GET_TEMP_UNIT = ":OPT:TUNIT?" #* Implementado
-GET_BURNOUT = ":OPT:BURN?"  #* Implementado
+#Burnout (4VT)
+SET_BURNOUT = ":OPT:BURN {mode}" # ON/OFF
+GET_BURNOUT = ":OPT:BURN?"
 
 # Unidad de aceleración 
 SET_ACC_UNIT = ":OPT:ACCUNIT {unit}" # G/MPSS
@@ -42,15 +43,13 @@ GET_ROOM_TEMP = ":OPT:TEMP?"
 # =========================================================
 # Grupo STATUS
 # =========================================================
-GET_POWER_VOLTAGE = "STAT:POW:BATTVAL?" #* Implementado
-GET_POWER_SOURCE = ":STAT:POW:BATTSOUR?" #* Implementado
-GET_POWER_STATUS = ":STAT:POW?" #* Implementado
+GET_POWER_STATUS = ":STAT:POW?"
+GET_STATUS = ":STAT:COND?" #Estado de operación
+GET_EXTENDED_STATUS=":STAT:EESR"
+GET_ERROR_STATUS = ":STAT:ERR?"
 
-GET_STATUS = ":STAT:COND?" #Estado de operación general: STOP,REC,ARMED,SLEEP #* Implementado
-GET_INFO = ":STAT:INFO?" #* Implementado
-GET_COM_STATUS = ":STAT:COMM?" #* Implementado
-GET_SENSOR_STATUS = ":STAT:SENSOR?" #* Implementado
-GET_ERROR_STATUS = ":STAT:ERR?" #0: Sin error, 100: Error SD, 200: Error COMM, 300: Error de sensor, 400: Error de comando inválido #* Implementado
+SET_STATUS_FILTER = ":STAT:FILT{number} {value}" #number:0-15 (bit) / value: NEV (no detection),RISE,FALL,BOTH
+GET_STATUS_FILTER = ":STAT:FILT{number}?"
 
 # =========================================================
 # Grupo IF (Interfaz)
@@ -125,15 +124,10 @@ GET_DATA_CAPTURE_MODE = ":DATA:CAPTM?"
 # =========================================================
 START_MEASUREMENT = ":MEAS:START"
 STOP_MEASUREMENT = ":MEAS:STOP"
-READ_ONCE = ":MEAS:OUTP:ONE?" #*Implementado
-#READ_CONT = ":MEAS:OUTP:DATA?" #? Existe?
 
-SET_MEAS_FORMAT = ":MEAS:OUTP:MODE {mode}" #Text o Binary #*Implementado
-#! En texto devolvería valores CSV, sino sería tramas binarias
+READ_ONCE = ":MEAS:OUTP:ONE?"
 
-GET_LAST_DATETIME = ":MEAS:TIME?"  #*Implementado
 GET_CAPTURE_POINTS  = ":MEAS:CAPT?"  
-#GET_DATA_FORMAT = ":MEAS:OUTP:MODE?"  #? Existe?
 GET_MEASUREMENT_TIME = ":MEAS:TIME?" # Devuelve started,ended and trigger time
 
 
@@ -155,24 +149,23 @@ TRANS_CLOSE = ":TRANS:CLOSE?" #*Implementado
 # =========================================================
 # Grupo FILE
 # =========================================================
-FILE_SAVE = ":FILE:SAVE {filename}" #Formato filename: "¥SD¥FOLDER¥SAVE.CND" 
-FILE_LS = ":FILE:LIST?" #*Implementado
-FILE_LS_FILTER = ":FILE:LIST:FILT {pattern}" #Filtrar por txt, GBD, etc #*Implementado
-FILE_LS_NUM = ":FILE:NUM?" #*Implementado
-
-FILE_CD = ":FILE:CD {path}" #*Implementado
-FILE_PWD = ":FILE:CD?" #*Implementado
-FILE_MKDIR = ":FILE:MD {path}"  #*Implementado
-FILE_RMDIR = "FILE:RD {path}" #*Implementado
-FILE_RM = "FILE:RM {filename}" #*Implementado
-FILE_CP = "FILE:CP {filename} {copyname}" #*Implementado
-FILE_MV = "FILE:MV {filepath} {new_path}" #*Implementado
-
+FILE_SAVE = ":FILE:SAVE {filepath}" #Formato filepath: "¥SD¥FOLDER¥SAVE.CND" 
+FILE_LOAD = ":FILE:LOAD {filepath}" #Formato filepath: "¥SD¥FOLDER¥SAVE.CND"
+FILE_CD = ":FILE:CD {dirpath}" #Formato dirpath: "¥SD¥FOLDER¥SAVE¥"
+FILE_PWD = ":FILE:CD?"
+FILE_MKDIR = ":FILE:MD {dirpath}"
+FILE_RMDIR = ":FILE:RD {dirpath}"
+FILE_RM = ":FILE:RM {filepath}"
+FILE_MV = ":FILE:MV {file_source},{file_dest}"
+FILE_CP = ":FILE:CP {file_source},{file_dest}"
 FILE_SPACE = ":FILE:SPACE?" #Devuelve el espacio en bytes
+FILE_LS_NUM = ":FILE:NUM?" #Devuelve el número de archivos en LOG (SD o MEM depende de donde estemos)
+FILE_LS = ":FILE:LIST?"
+FILE_LS_FORMAT = ":FILE:LIST:FORM {format}" #format: LONG or SHORT
+FILE_LS_FILTER = ":FILE:LIST:FILT {extension}" #Filtrar por txt, GBD, etc. OFF para quitar
 
-SAVE_FILE_SETTINGS = ":FILE:SAVE {filename}" #*Implementado
-LOAD_FILE_SETTINGS = ":FILE:LOAD {filename}" #*Implementado
-
+GET_LS_FORMAT = ":FILE:LIST:FORM?"
+GET_LS_FILTER = ":FILE:LIST:FILT?"
 
 # =========================================================
 # Grupo TRIGGER

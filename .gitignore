@@ -3,6 +3,7 @@ data/
 codewriter.exe
 codewriter.py
 todo_el_codigo.txt
+codigo_completo.txt
 .vscode/
 # Byte-compiled / optimized / DLL files
 __pycache__/

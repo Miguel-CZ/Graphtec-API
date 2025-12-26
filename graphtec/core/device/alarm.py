@@ -51,7 +51,7 @@ class AlarmModule(BaseModule):
         ch = self._validate_channel(ch)
 
         mode = mode.upper()
-        mode_options = {"HIGH", "LOW", "OFF"}
+        mode_options = {"HI", "LO", "OFF"}
         if mode not in mode_options:
             raise CommandError(f"mode inválido: {mode} (válidos: {sorted(mode_options)})")
         
