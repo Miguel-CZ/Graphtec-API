@@ -15,10 +15,7 @@ from graphtec.io.decoder import (
 
 logger = logging.getLogger(__name__)
 
-try:
-    from openpyxl import Workbook
-except ImportError:
-    Workbook = None  # type: ignore
+import xlsxwriter
 
 
 class GraphtecCapture:
@@ -200,12 +197,6 @@ class GraphtecCapture:
 
         NO genera GBD ni CSV.
         """
-        if Workbook is None:
-            raise RuntimeError(
-                "openpyxl no está instalado. "
-                "Instala 'openpyxl' para poder usar download_excel()."
-            )
-
         core = self._download_core(path_in_gl, dest_folder)
         if core is None:
             return None
@@ -677,30 +668,30 @@ class GraphtecCapture:
     # GENERACIÓN DEL CSV
     # ============================================================
     def _data_to_csv(
-        self,
-        data_bytes: bytes,
-        csv_path: str,
-        order: List[str],
-        counts: int,
-        start_dt: Optional[datetime],
-        delta: timedelta,
-        amp_info: Dict[str, Dict[str, str]],
-        spans: Dict[str, Tuple[int, int]],
-        module: str,
-    ) -> None:
+                    self,
+                    data_bytes: bytes,
+                    csv_path: str,
+                    order: List[str],
+                    counts: int,
+                    start_dt: Optional[datetime],
+                    delta: timedelta,
+                    amp_info: Dict[str, Dict[str, str]],
+                    spans: Dict[str, Tuple[int, int]],
+                    module: str,
+                    ) -> None:
         """
         Genera un CSV a partir de los datos crudos y la metadata.
         """
         timestamps, cols, rows_phys = self._decode_to_table(
-            data_bytes=data_bytes,
-            order=order,
-            counts=counts,
-            start_dt=start_dt,
-            delta=delta,
-            amp_info=amp_info,
-            spans=spans,
-            module=module,
-        )
+                                                            data_bytes=data_bytes,
+                                                            order=order,
+                                                            counts=counts,
+                                                            start_dt=start_dt,
+                                                            delta=delta,
+                                                            amp_info=amp_info,
+                                                            spans=spans,
+                                                            module=module,
+                                                        )
 
         with open(csv_path, "w", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
@@ -715,26 +706,20 @@ class GraphtecCapture:
     # GENERACIÓN DEL EXCEL
     # ============================================================
     def _data_to_excel(
-        self,
-        data_bytes: bytes,
-        xlsx_path: str,
-        order: List[str],
-        counts: int,
-        start_dt: Optional[datetime],
-        delta: timedelta,
-        amp_info: Dict[str, Dict[str, str]],
-        spans: Dict[str, Tuple[int, int]],
-        module: str,
-    ) -> None:
+                        self,
+                        data_bytes: bytes,
+                        xlsx_path: str,
+                        order: List[str],
+                        counts: int,
+                        start_dt: Optional[datetime],
+                        delta: timedelta,
+                        amp_info: Dict[str, Dict[str, str]],
+                        spans: Dict[str, Tuple[int, int]],
+                        module: str,
+                        ) -> None:
         """
-        Genera un Excel (.xlsx) a partir de los datos crudos y la metadata.
+        Genera un Excel (.xlsx) a partir de los datos crudos y metadata.
         """
-        if Workbook is None:
-            raise RuntimeError(
-                "openpyxl no está instalado. "
-                "Instala 'openpyxl' para poder usar _data_to_excel()."
-            )
-
         timestamps, cols, rows_phys = self._decode_to_table(
             data_bytes=data_bytes,
             order=order,
@@ -746,17 +731,19 @@ class GraphtecCapture:
             module=module,
         )
 
-        wb = Workbook()
-        ws = wb.active
-        if ws is not None:
-            ws.title = "Data"
+        wb = xlsxwriter.Workbook(xlsx_path)
+
+        try:
+            ws = wb.add_worksheet("Data")
 
             # Cabecera
-            ws.append(["TimeStamp"] + cols)
+            ws.write_row(0, 0, ["TimeStamp"] + cols)
 
             # Filas
-            for ts, row in zip(timestamps, rows_phys):
+            for r, (ts, row) in enumerate(zip(timestamps, rows_phys), start=1):
                 ts_str = ts.isoformat() if ts is not None else ""
-                ws.append([ts_str] + list(row))
+                ws.write(r, 0, ts_str)
+                ws.write_row(r, 1, list(row))
 
-        wb.save(xlsx_path)
+        finally:
+            wb.close()

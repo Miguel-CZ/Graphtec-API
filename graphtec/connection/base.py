@@ -28,17 +28,12 @@ class BaseConnection(ABC):
         pass
 
     @abstractmethod
-    def receive(self, size=4096) -> bytes:
-        """Recibe {size} datos desde el dispositivo."""
+    def receive(self) -> bytes:
+        """Recibe datos desde el dispositivo."""
         pass
 
-    @abstractmethod
-    def receive_until(self, terminator: bytes = b"\r\n") -> bytes:
-        """Recibe datos hasta {terminator} desde el dispositivo."""
-        pass
-    @abstractmethod
-    def receive_line(self)->bytes:
-        """Recibe datos hasta eol desde el dispositivo."""
+    def query(self, command) -> bytes | None:
+        """Envía un comando y recibe la respuesta."""
         pass
 
     def is_open(self) -> bool:

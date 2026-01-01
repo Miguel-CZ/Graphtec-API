@@ -169,15 +169,6 @@ class SerialConnection(BaseConnection):
                 return b""
 
         # Resto: ASCII
-        return self.read_ascii()
-
-    def read_ascii(self) -> bytes:
-        """
-        Lee una respuesta ASCII hasta CRLF.
-
-        Returns:
-            bytes: Datos recibidos.
-        """
         return self.receive_until(b"\r\n")
 
     def _read_hash6_header(self):
