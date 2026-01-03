@@ -1,6 +1,7 @@
 import serial
 import time
 from graphtec.connection.base import BaseConnection
+from graphtec.core.exceptions import ConnectionError, TimeoutError, DataError
 import logging
 
 logger = logging.getLogger(__name__)
@@ -177,7 +178,7 @@ class SerialConnection(BaseConnection):
             ndigits_b, length_str_b, data_len(int)
         """
         if not self._connection:
-            raise RuntimeError("[SerialConnection] Serial no inicializado")
+            raise ConnectionError("[SerialConnection] Serial no inicializado")
 
         # 1) Leer hasta encontrar '#'
         while True:
@@ -190,8 +191,7 @@ class SerialConnection(BaseConnection):
         # 2) Leer dígito que indica nº de dígitos del length
         ndigits_b = self._connection.read(1)
         if not ndigits_b or not ndigits_b.isdigit():
-            logger.error(f"[SerialConnection] Cabecera binaria inválida: {ndigits_b!r}")
-            raise ValueError("[SerialConnection] Cabecera binaria inválida (#6).")
+            raise DataError("[SerialConnection] Cabecera binaria inválida (#6).")
 
         nd = int(ndigits_b.decode())
 
@@ -201,7 +201,7 @@ class SerialConnection(BaseConnection):
             data_len = int(length_str.decode())
         except Exception:
             logger.error(f"[SerialConnection] Longitud inválida en #6******: {length_str!r}")
-            raise ValueError("Error longitud bloque (#6******).")
+            raise DataError("Error longitud bloque (#6******).")
 
         return ndigits_b, length_str, data_len
 
@@ -213,7 +213,7 @@ class SerialConnection(BaseConnection):
           - :TRANS:OUTP:HEAD?
         """
         if not self._connection:
-            raise RuntimeError("Serial no inicializado")
+            raise ConnectionError("Serial no inicializado")
 
         ndigits_b, length_str, data_len = self._read_hash6_header()
 
@@ -234,7 +234,7 @@ class SerialConnection(BaseConnection):
           b'#' + '6' + '******' + STATUS + DATA + CHECKSUM
         """
         if not self._connection:
-            raise RuntimeError("[SerialConnection] Serial no inicializado")
+            raise ConnectionError("[SerialConnection] Serial no inicializado")
 
         ndigits_b, length_str, data_len = self._read_hash6_header()
 
@@ -284,7 +284,7 @@ class SerialConnection(BaseConnection):
         Limpia los buffers de entrada y salida.
         """
         if not self._connection:
-            raise RuntimeError("[SerialConnection] Serial no inicializado")
+            raise ConnectionError("[SerialConnection] Serial no inicializado")
 
         self._connection.reset_input_buffer()
         self._connection.reset_output_buffer()

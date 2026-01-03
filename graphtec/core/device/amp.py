@@ -28,40 +28,6 @@ class AmpModule(BaseModule):
             self.channels[ch]["range"] = ch_range
             logger.info(f"[GL-AMP] CH{ch} - TYPE: {ch_type}, INPUT: {ch_input}, RANGE: {ch_range}")
         return self.channels
-
-
-    #TODO Quitar updates y rehacer como guardar la config.
-    def update_channels(self) -> dict:
-        """Actualiza la configuración de todos los canales desde el dispositivo."""
-        for ch in self.channels:
-            self.update_channel_type(ch)
-            self.update_channel_input(ch)
-            self.update_channel_range(ch)
-        return self.channels
-
-    def update_channel_type(self, channel: int) -> str:
-        cmd = GET_CHANNEL_TYPE.format(ch=channel)
-        resp = self.connection.query(cmd)
-        value = self._get_last_token(resp.decode() if isinstance(resp, bytes) else resp)
-        self.channels[channel]["type"] = value
-        logger.debug(f"[GL-AMP] CH{channel} TYPE = {value}")
-        return value
-
-    def update_channel_input(self, channel: int) -> str:
-        cmd = GET_CHANNEL_INPUT.format(ch=channel)
-        resp = self.connection.query(cmd)
-        value = self._get_last_token(resp.decode() if isinstance(resp, bytes) else resp)
-        self.channels[channel]["input"] = value
-        logger.debug(f"[GL-AMP] CH{channel} INPUT = {value}")
-        return value
-
-    def update_channel_range(self, channel: int) -> str:
-        cmd = GET_CHANNEL_RANGE.format(ch=channel)
-        resp = self.connection.query(cmd)
-        value = self._get_last_token(resp.decode() if isinstance(resp, bytes) else resp)
-        self.channels[channel]["range"] = value
-        logger.debug(f"[GL-AMP] CH{channel} RANGE = {value}")
-        return value
     
     def get_channel_type(self,channel:int):
         cmd = GET_CHANNEL_TYPE.format(ch=channel)
