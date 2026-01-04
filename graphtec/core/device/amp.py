@@ -15,9 +15,9 @@ class AmpModule(BaseModule):
     TIPOS_ENTRADA = {
         "VT": ["OFF", "TEMP", "DC_V"], # Módulo GS-4VT
         "TSR": ["OFF", "TEMP"], # Módulo GS-4TSR
-        "AC": ["AC1_2", "AC1_3", "AC3_3"], # Módulo GS-3AT
+        "AC": ["AC1_2", "AC1_3", "AC3_3"], # Módulo GS-DPA-AC
         "TH":[], # Módulo GS-TH
-        "AT":[], # Módulo GS-AT
+        "AT":[], # Módulo GS-3AT
         "LU":[], # Módulo GS-LU
         "CO2":[], # Módulo GS-CO2
         "CO2_TH":[], # Módulo GS-CO2-TH
