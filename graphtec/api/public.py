@@ -103,7 +103,7 @@ class Graphtec:
         logger.info("[Graphtec] Consulta de configuración de canales.")
         return self.device.amp.get_channels()
     
-    def set_channel(self, channel: int, ch_type:str="", ch_input:str="", ch_range:str=""):
+    def set_channel(self, channel: int, ch_input:str="", ch_range:str=""):
         """
         Configura el tipo de un canal.\n
         Args:\n
@@ -111,19 +111,6 @@ class Graphtec:
             ch_type  (str): Tipo de canal ("DC_V", "TEMP", etc).\n
             ch_input (str): Entrada del canal ("VT","TC-K","TC-T",etc).\n
             ch_range (str): Rango de Medición ("20MV", "50MV","1V","5V",etc)\n
-        
-        Opciones de Canal:\n
-            Sensor --  CH1  --  CH2  --  CH3  -- CH4\n
-              TH   --  TEMP --   RH  --\n
-              AT   --   X   --   Y   --   Z   -- \n
-              LU   -- ILLUM --   UV  --\n
-              CO2  --  CO2  -- \n
-              AC   -- CURRENT1 -- CURRENT2 --\n
-              TSR  --  CH1  --  CH2  --  CH3  -- CH4\n
-              VT   --  CH1  --  CH2  --  CH3  -- CH4\n
-            CO2_TH --  TEMP --  RH   --  CO2\n
-            LU_TH  --  TEMP --  RH   -- ILLUM -- UV\n
-            CO2_LU -- ILLUM --  UV   --  CO2  --\n
         
         Opciones de Input:\n
         TH / 3AT / CO2 / LXUV : No setting\n
@@ -147,9 +134,108 @@ class Graphtec:
             (UV ray-> Rango fijo)\n
         Modulos TH / CO2 / 4TSR: No setting\n
                 """
-        logger.info(f"[Graphtec] Configuración de canal {channel}: TYPE={ch_type}, INPUT={ch_input}, RANGE={ch_range}")
-        return self.device.amp.set_channel(channel=channel, ch_type=ch_type, ch_input=ch_input, ch_range=ch_range)
+        logger.info(f"[Graphtec] Configuración de canal {channel}: INPUT={ch_input}, RANGE={ch_range}")
+        return self.device.amp.set_channel(channel=channel, ch_input=ch_input, ch_range=ch_range)
+
+    def set_channels(self,ch_input:str="", ch_range:str=""):
+        """Configura todos los canales con los mismos parámetros."""
+        for ch in range(1, 5):
+            self.set_channel(channel=ch, ch_input=ch_input, ch_range=ch_range)
+        logger.info(f"[Graphtec] Configuración de todos los canales: INPUT={ch_input}, RANGE={ch_range}")
+
+    def set_clamp(self, channel: int, mode: str|None=None, voltage: int|None=None, power_factor: float|None=None):
+        """
+        Configura el clampeo de un canal.
+        Args:
+            channel (int): 1-4
+            mode (str): AC1_2 / AC1_3 / AC3_3
+            voltage (int): Voltaje de referencia (90-264V)
+            power_factor (float): Factor de potencia (0.3-1.0)
+        """
+        logger.info(f"[Graphtec] Configuración del clampeo del canal {channel}: MODE={mode}, VOLTAGE={voltage}, POWER_FACTOR={power_factor}")
+        return self.device.amp.set_clamp(channel, mode, voltage, power_factor)
     
+    def get_clamp(self,channel:int):
+        """
+        Devuelve la configuración de clampeo de un canal.
+        Args:
+            channel (int): 1-4
+        """
+        logger.info(f"[Graphtec] Consulta del clampeo del canal {channel}.")
+        return self.device.amp.get_clamp(channel)
+    
+    def get_clamps(self):
+        """Devuelve la configuración de clampeo de todos los canales."""
+        logger.info("[Graphtec] Consulta del clampeo de todos los canales.")
+        return self.device.amp.get_clamps()
+    
+    def get_accelerometer_calibration(self,channel:int):
+        """
+        Devuelve el estado de calibración del acelerómetro de un canal.
+        Args:
+            channel (int): 1-4
+        """
+        logger.info(f"[Graphtec] Consulta de la calibración del acelerómetro del canal {channel}.")
+        return self.device.amp.get_accelerometer_calibration(channel)
+    
+    def set_accelerometer_calibration(self,channel:int,mode:str):
+        """
+        Ejecuta la calibración del acelerómetro de un canal.
+        Args:
+            channel (int): 1-4
+        """
+        logger.info(f"[Graphtec] Ejecución de la calibración del acelerómetro del canal {channel}.")
+        return self.device.amp.set_accelerometer_calibration(channel,mode)
+    
+    def execute_accelerometer_calibration(self,channel:int):
+        """
+        Ejecuta la calibración del acelerómetro de un canal.
+        Args:
+            channel (int): 1-4
+        """
+        logger.info(f"[Graphtec] Ejecución de la calibración del acelerómetro del canal {channel}.")
+        return self.device.amp.execute_accelerometer_calibration(channel)
+    
+    def set_co2_calibration(self,channel:int,mode:str):
+        """
+        Configura la calibración del sensor CO2 de un canal.
+        Args:
+            channel (int): 1-4
+            mode (str): ON / OFF
+        """
+        logger.info(f"[Graphtec] Configuración de la calibración del sensor CO2 del canal {channel}: MODE={mode}")
+        return self.device.amp.set_co2_calibration(channel,mode)
+    
+    def get_co2_calibration(self,channel:int):
+        """
+        Devuelve el estado de calibración del sensor CO2 de un canal.
+        Args:
+            channel (int): 1-4
+        """
+        logger.info(f"[Graphtec] Consulta de la calibración del sensor CO2 del canal {channel}.")
+        return self.device.amp.get_co2_calibration(channel)
+    
+    def set_accumulator_count(self, channel: int, mode: str, value: int):
+        """
+        Configura la detección alto/bajo del contador lógico.
+        Args:
+            channel (int): 1-4
+            mode (str): HI / LO
+            value (float): Valor de umbral
+        """
+        logger.info(f"[Graphtec] Configuración del contador lógico del canal {channel}: MODE={mode}, VALUE={value}")
+        temp_unit = self.device.option.get_temp_unit()
+        return self.device.amp.set_accumulator_count(channel, mode, value,temp_unit)
+    
+    def get_accumulator_count(self,channel:int):
+        """
+        Devuelve la configuración del contador lógico de un canal.
+        Args:
+            channel (int): 1-4
+        """
+        logger.info(f"[Graphtec] Consulta del contador lógico del canal {channel}.")
+        return self.device.amp.get_accumulator_count(channel)
+
     # =========================================================
     # Configuración de Trigger
     # =========================================================

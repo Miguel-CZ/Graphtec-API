@@ -64,33 +64,33 @@ GET_CONN_NLCODE = ":IF:NLCODE?"
 # =========================================================
 # Grupo AMP
 # =========================================================
-#SET_CHANNEL_ALL = ":AMP:ALL {command}" #! Probar en profundidad. Command-> TEMP
 SET_CHANNEL_ALL_RANGE = ":AMP:ALL:RANG {range}"
 
 SET_CHANNEL_INPUT = ":AMP:CH{ch}:INP {mode}" #Tipo de entrada del canal 
 SET_CHANNEL_RANGE = ":AMP:CH{ch}:RANG {value}" #Rango de medida según entrada 
-SET_CHANNEL_TYPE =":AMP:CH{ch}:TYP {ch_type}" # Tipo del sensor 
 
 SET_CHANNEL_CLAMP = ":AMP:CH{ch}:CLAMPM {mode}" #Modo clampeo ON/OFF
-SET_CHANNEL_VOLTAGE_REF = ":AMP:CH{n}:VOLT {value}" #Valor de referencia de voltaje
+SET_CLAMP_VOLTAGE_REF = ":AMP:CH{n}:VOLT {value}" #Valor de referencia de voltaje
 SET_CHANNEL_PF = ":AMP:CH{n}:PF" #Valor del fdp para AC
 
 SET_CHANNEL_ACC_CALIBRATE = ":AMP:CH{n}:ACCCAL:FUNC {mode}" #Estado de Calibracion del acelerómetro ON/OFF
-SET_CHANNEL_ACC_CALIBRATE_EXEC = ":AMP:CH{n}:ACCCAL:EXEC" #Ejecuta la calibración del acelerómetro
-SET_CHANNEL_CO2_CALIBRATE = ":AMP:CH{n}:CO2CAL" #Calibración del sensor CO2 ON/OFF
+SET_CHANNEL_ACC_CALIBRATE_EXEC = ":AMP:CH{n}:ACCCAL:EXE" #Ejecuta la calibración del acelerómetro
+SET_CHANNEL_CO2_CALIBRATE = ":AMP:CH{n}:CO2CAL:FUNC {mode}" #Calibración del sensor CO2 ON/OFF
 
-SET_CHANNEL_COUNT_HIGHLOW = ":AMP:CH{ch}:COUNT:HILO" # Configura la detección alto/bajo del contador lógico
-SET_CHANNEL_COUNT_LEVEL = ":AMP:CH{ch}:COUNT:LEV" # Nivel de umbral para conteo
+SET_CHANNEL_COUNT = ":AMP:CH{ch}:COUNT:LEV:{mode}.{value}" # Configura la detección alto/bajo del contador lógico
 
 GET_CHANNEL_INPUT = ":AMP:CH{ch}:INP?" #Devuelve el tipo de entrada 
 GET_CHANNEL_RANGE = ":AMP:CH{ch}:RANG?" #Devuelve el rango 
 GET_CHANNEL_TYPE = ":AMP:CH{ch}:TYP?" #Devuelve el tipo de sensor 
 
 GET_CHANNEL_CLAMP = ":AMP:CH{ch}:CLAMPM?" # Estado del Clamp
-GET_CHANNEL_VOLTAGE_REF = ":AMP:CH{ch}:VOLT?" #Devuelve el offset del voltaje (referencia)
-GET_CHANNEL_ACC = ":AMP:CH{ch}:ACCCAL:FUNC?" #Estado de la calibración
+GET_CLAMP_VOLTAGE_REF = ":AMP:CH{ch}:VOLT?" #Devuelve el offset del voltaje (referencia)
 GET_CHANNEL_PF = ":AMP:CH{ch}:PF?"
 
+GET_CHANNEL_ACC_CALIBRATE = ":AMP:CH{ch}:ACCCAL:FUNC?" #Estado de la calibración
+GET_CHANNEL_CO2_CALIBRATE = ":AMP:CH{ch}:CO2CAL:FUNC?" #Estado de la calibración del sensor CO2
+
+GET_CHANNEL_COUNT = ":AMP:CH{ch}:COUNT:LEV?" # Consulta la configuración de detección del contador lógico
 
 # =========================================================
 # Grupo DATA
@@ -134,15 +134,15 @@ GET_MEASUREMENT_TIME = ":MEAS:TIME?" # Devuelve started,ended and trigger time
 # =========================================================
 # Grupo TRANSFER
 # =========================================================
-SET_TRANS_SOURCE = ":TRANS:SOUR {source},{path}" # DISK,<path> // MEM,<path> #*Implementado
-TRANS_OPEN = ":TRANS:OPEN?" #*Implementado
-TRANS_SEND_HEADER = ":TRANS:OUTP:HEAD?" #*Implementado
-TRANS_SIZE = ":TRANS:OUTP:SIZE?" #*Implementado
+SET_TRANS_SOURCE = ":TRANS:SOUR {source},{path}" # DISK,<path> // MEM,<path>  
+TRANS_OPEN = ":TRANS:OPEN?"  
+TRANS_SEND_HEADER = ":TRANS:OUTP:HEAD?"  
+TRANS_SIZE = ":TRANS:OUTP:SIZE?"  
 
-SET_TRANS_DATA = ":TRANS:OUTP:DATA {start},{end}" #*Implementado
-TRANS_SEND_DATA = ":TRANS:OUTP:DATA?" #*Implementado
+SET_TRANS_DATA = ":TRANS:OUTP:DATA {start},{end}"  
+TRANS_SEND_DATA = ":TRANS:OUTP:DATA?"  
 
-TRANS_CLOSE = ":TRANS:CLOSE?" #*Implementado
+TRANS_CLOSE = ":TRANS:CLOSE?"  
 
 
 
