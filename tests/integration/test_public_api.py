@@ -24,7 +24,7 @@ def test_connection_cycle(graphtec):
     graphtec.connect()
     assert graphtec.is_connected() is True
 
-    # Disconnect idempotente (tu código avisa y retorna)
+    # Disconnect idempotente
     graphtec.disconnect()
     assert graphtec.is_connected() is False
 

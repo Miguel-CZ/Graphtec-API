@@ -1,8 +1,7 @@
 """
 Excepciones específicas para la librería GL100.
 
-Todas las excepciones heredan de GL100Error, lo que permite capturar
-cualquier error del núcleo con una sola cláusula si se desea.
+Todas las excepciones heredan de GraphtecError.
 """
 
 class GraphtecError(Exception):
@@ -14,7 +13,7 @@ class GraphtecError(Exception):
 # Errores de conexión / transporte
 # ───────────────────────────────
 class ConnectionError(GraphtecError):
-    """Error relacionado con la conexión física (USB/WLAN)."""
+    """Error relacionado con la conexión física (Serial/USB/WLAN)."""
     pass
 
 
@@ -47,17 +46,6 @@ class ResponseError(CommandError):
 class DataError(GraphtecError):
     """Error en la recepción o decodificación de datos."""
     pass
-
-
-class ParseError(DataError):
-    """Error al interpretar datos binarios o ficheros GBD."""
-    pass
-
-
-class FileFormatError(DataError):
-    """El archivo o bloque recibido no cumple el formato esperado."""
-    pass
-
 
 # ───────────────────────────────
 # Errores de configuración / estado

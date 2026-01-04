@@ -11,14 +11,12 @@ from graphtec.core.device.trigger import TriggerModule
 from graphtec.core.device.alarm import AlarmModule
 from graphtec.core.device.logic import LogicModule
 from graphtec.core.device.option import OptionModule
-from graphtec.config.config_manager import ConfigManager
 import logging
 logger = logging.getLogger(__name__)
 
 class GraphtecDevice:
     def __init__(self, connection):
         self.connection = connection
-        self.config = ConfigManager()
 
         # Inicializa módulos
         self.common = CommonModule(self)

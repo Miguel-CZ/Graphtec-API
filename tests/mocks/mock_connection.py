@@ -9,11 +9,11 @@ BytesLike = Union[bytes, bytearray, memoryview]
 @dataclass
 class MockConnection:
     """
-    Mock que cubre el interfaz que usa tu librería (según tu código):
+    Mock que cubre el interfaz que usa la librería para comunicarse con el GL100::
       - open(), close()
       - send(cmd)
       - query(cmd) -> bytes
-      - read_ascii() (compatibilidad con GraphtecCapture/TRANS)
+      - read_ascii() 
       - propiedad _connection para que BaseConnection.is_open() funcione
     """
     responses: Dict[str, bytes]
@@ -55,8 +55,7 @@ class MockConnection:
 
     def read_ascii(self) -> bytes:
         """
-        Compatibilidad: en tu código hay casos donde, tras un query binario,
-        se lee el 'terminador' por read_ascii(). Aquí devolvemos vacío.
+        Lee respuesta ASCII.
         """
         if not self.is_open:
             raise ConnectionError("MockConnection cerrada")
