@@ -1,5 +1,5 @@
 from graphtec.core.device.base import BaseModule
-from graphtec.core.commands import *
+from graphtec.core.commands import COMMON
 import logging
 from graphtec.core.exceptions import (
     CommandError,
@@ -34,7 +34,7 @@ class CommonModule(BaseModule):
 
     def get_id_raw(self) -> str:
         """Devuelve la respuesta raw del *IDN? como str."""
-        resp = self.connection.query(GET_IDN)
+        resp = self.connection.query(COMMON.GET_IDN)
         text = self._to_str(resp)
         if not text:
             raise ResponseError("Sin respuesta del GL100 al comando *IDN?.")
@@ -82,10 +82,10 @@ class CommonModule(BaseModule):
 
     def clear(self):
         """Limpia el estado interno (errores, buffers, etc). No devuelve respuesta."""
-        self.connection.send(CLEAR)
+        self.connection.send(COMMON.CLEAR)
         logger.debug("[GL-COMMON] Estado interno limpiado (*CLS).")
 
     def save_settings(self):
         """Guarda configuración en el equipo. No devuelve respuesta."""
-        self.connection.send(SAVE_SETTINGS)
+        self.connection.send(COMMON.SAVE_SETTINGS)
         logger.debug("[GL-COMMON] Configuración guardada (*SAV).")
